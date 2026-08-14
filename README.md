@@ -1,3 +1,3 @@
-# FacturaExpress_V3
+# FacturaExpress
 
-FacturaExpress V3: sistema de facturacion electronica (Node.js + Express + MySQL + React).
+FacturaExpress: sistema de facturacion electronica (Node.js + Express + MySQL).
