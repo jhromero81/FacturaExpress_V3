@@ -1,18 +1,4 @@
-# FacturaExpress - API REST
-
-> **Evidencia GA7-220501096-AA5-EV03:** Diseño y desarrollo de servicios web – proyecto
->
-> Servicios web (API REST) del sistema de facturación electrónica **FacturaExpress**, construidos sobre el stack **Node.js + Express.js + MySQL**.
-
----
-
-## 1. Objetivo de la evidencia
-
-Desarrollar la red de comunicación que permite el intercambio de datos entre el sistema cliente (frontend React) y la base de datos de FacturaExpress. Los servicios implementados responden a las necesidades funcionales identificadas en las fases de análisis y diseño: **autenticación**, **clientes**, **productos**, **ventas/facturación**, **configuración** y **reportes**.
-
----
-
-## 2. Tecnologías y stack utilizado
+## 1. Tecnologías y stack utilizado
 
 | Componente           | Tecnología                                  |
 | -------------------- | ------------------------------------------- |
@@ -32,7 +18,7 @@ Desarrollar la red de comunicación que permite el intercambio de datos entre el
 
 ---
 
-## 3. Estructura del proyecto
+## 2. Estructura del proyecto
 
 ```
 backend/
@@ -76,7 +62,7 @@ backend/
 
 ---
 
-## 4. Modelo de datos
+## 3. Modelo de datos
 
 ```mermaid
 erDiagram
@@ -151,7 +137,7 @@ erDiagram
 
 ---
 
-## 5. Análisis de endpoints
+## 4. Análisis de endpoints
 
 Todas las rutas (excepto `POST /api/auth/login`, `POST /api/auth/logout` y
 `GET /api/health`) exigen autenticación. La API acepta el token JWT de dos formas:
@@ -174,7 +160,7 @@ La estructura de respuesta es consistente:
 { "success": false, "message": "Descripción del error." }
 ```
 
-### 5.1 Autenticación — `/api/auth`
+### 4.1 Autenticación — `/api/auth`
 
 | Método | Ruta            | Protegida | Descripción                                      |
 | ------ | --------------- | --------- | ------------------------------------------------ |
@@ -208,7 +194,7 @@ La estructura de respuesta es consistente:
 | 400    | Faltan campos obligatorios.       |
 | 429    | Demasiados intentos (5 por IP cada 15 min). |
 
-### 5.2 Clientes — `/api/clientes`
+### 4.2 Clientes — `/api/clientes`
 
 | Método | Ruta             | Protegida | Descripción                                      |
 | ------ | ---------------- | --------- | ------------------------------------------------ |
@@ -247,7 +233,7 @@ La estructura de respuesta es consistente:
 | 409    | Ya existe un cliente con esa identificación.             |
 | 401    | Sin token o token inválido.                              |
 
-### 5.3 Productos — `/api/productos`
+### 4.3 Productos — `/api/productos`
 
 | Método | Ruta                       | Protegida | Descripción                                     |
 | ------ | -------------------------- | --------- | ----------------------------------------------- |
@@ -275,7 +261,7 @@ La estructura de respuesta es consistente:
 | 409    | Código de producto duplicado.              |
 | 400    | Precio o cantidad inválidos.               |
 
-### 5.4 Ventas y facturación — `/api/facturas`
+### 4.4 Ventas y facturación — `/api/facturas`
 
 | Método | Ruta                   | Protegida | Descripción                                      |
 | ------ | ---------------------- | --------- | ------------------------------------------------ |
@@ -347,7 +333,7 @@ enviado | pendiente | procesando | rechazado | anulada
 | `pagina`  | number | Página de resultados.                          |
 | `limite`  | number | Registros por página (por defecto 20).         |
 
-### 5.5 Configuración — `/api/configuracion`
+### 4.5 Configuración — `/api/configuracion`
 
 | Método | Ruta                        | Protegida | Descripción                                  |
 | ------ | --------------------------- | --------- | -------------------------------------------- |
@@ -356,7 +342,7 @@ enviado | pendiente | procesando | rechazado | anulada
 | PUT    | `/api/configuracion/fiscal` | Sí        | Actualiza resolución DIAN y vigencia del certificado. |
 | POST   | `/api/configuracion/dian/sync` | Sí    | Simula sincronización con la DIAN.           |
 
-### 5.6 Reportes — `/api/reportes`
+### 4.6 Reportes — `/api/reportes`
 
 | Método | Ruta                                  | Protegida | Descripción                                      |
 | ------ | ------------------------------------- | --------- | ------------------------------------------------ |
@@ -382,7 +368,7 @@ enviado | pendiente | procesando | rechazado | anulada
 
 ---
 
-## 6. Usuarios de prueba (seed)
+## 5. Usuarios de prueba (seed)
 
 | Rol       | NIT            | Contraseña      |
 | --------- | -------------- | --------------- |
@@ -392,7 +378,7 @@ enviado | pendiente | procesando | rechazado | anulada
 
 ---
 
-## 7. Instalación y puesta en marcha
+## 6. Instalación y puesta en marcha
 
 ### Requisitos
 - Node.js ≥ 18
@@ -432,7 +418,7 @@ La API queda disponible en `http://localhost:4000` (verificar en `http://localho
 
 ---
 
-## 8. Pruebas con cURL
+## 7. Pruebas con cURL
 
 ```bash
 # 1. Iniciar sesión y guardar el token
@@ -458,7 +444,7 @@ curl -s http://localhost:4000/api/reportes/kpis -H "Authorization: Bearer $TOKEN
 
 ---
 
-## 9. Buenas prácticas aplicadas
+## 8. Buenas prácticas aplicadas
 
 - **Nombres descriptivos** en rutas, controladores, variables y métodos.
 - **Comentarios técnicos** en JSDoc explicando la función de cada módulo y controlador.
@@ -475,7 +461,7 @@ curl -s http://localhost:4000/api/reportes/kpis -H "Authorization: Bearer $TOKEN
 
 ---
 
-## 10. Seguridad
+## 9. Seguridad
 
 Medidas implementadas para proteger la API:
 
@@ -497,7 +483,7 @@ Medidas implementadas para proteger la API:
 
 ---
 
-## 11. Registro de servicios web (resumen)
+## 10. Registro de servicios web (resumen)
 
 | # | Módulo         | Método | Ruta                                 | Función principal                          |
 | - | -------------- | ------ | ------------------------------------ | ------------------------------------------ |
@@ -533,7 +519,7 @@ Medidas implementadas para proteger la API:
 
 ---
 
-## 12. Control de versiones (Git)
+## 11. Control de versiones (Git)
 
 ```bash
 # Desde la raíz del proyecto
