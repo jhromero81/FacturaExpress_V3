@@ -9,7 +9,8 @@
     "dev": "nodemon server.js",
     "db:setup": "node scripts/setupDb.js",
     "db:seed": "node scripts/seed.js",
-    "db:migrate": "node scripts/migrate.js"
+    "db:migrate": "node scripts/migrate.js",
+    "test": "node --test"
   },
   "keywords": [
     "facturaexpress",
