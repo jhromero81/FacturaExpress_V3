@@ -1,0 +1,15 @@
+$kind: http-request
+url: "{{baseUrl}}/clientes/{{clienteId}}"
+method: GET
+headers:
+  Authorization: Bearer {{token}}
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Detalle del cliente (HTTP 200)', function () {
+          pm.response.to.have.status(200);
+          const json = pm.response.json();
+          pm.expect(json.cliente.id).to.eql(pm.collectionVariables.get('clienteId'));
+      });
+    language: text/javascript
+order: 3000

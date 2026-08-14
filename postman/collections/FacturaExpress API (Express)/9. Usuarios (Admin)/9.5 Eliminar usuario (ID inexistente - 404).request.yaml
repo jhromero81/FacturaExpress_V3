@@ -1,0 +1,14 @@
+$kind: http-request
+name: 9.5 Eliminar usuario (ID inexistente -> 404)
+url: "{{baseUrl}}/usuarios/999999"
+method: DELETE
+headers:
+  Authorization: Bearer {{token}}
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('ID inexistente devuelve 404', function () {
+          pm.response.to.have.status(404);
+      });
+    language: text/javascript
+order: 5000

@@ -1,0 +1,6 @@
+# Postman local (workspace/cloud id, config personal)
+.postman/
+
+# Logs de servidor en backend
+backend/server.out.log
+backend/server.err.log

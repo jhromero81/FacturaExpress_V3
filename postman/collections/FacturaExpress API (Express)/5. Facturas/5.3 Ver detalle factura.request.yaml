@@ -1,0 +1,16 @@
+$kind: http-request
+url: "{{baseUrl}}/facturas/{{facturaId}}"
+method: GET
+headers:
+  Authorization: Bearer {{token}}
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Detalle de factura con items (HTTP 200)', function () {
+          pm.response.to.have.status(200);
+          const json = pm.response.json();
+          pm.expect(json.factura.items).to.be.an('array');
+          pm.expect(json.factura.items.length).to.be.at.least(1);
+      });
+    language: text/javascript
+order: 3000
