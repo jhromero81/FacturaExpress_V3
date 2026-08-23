@@ -1,0 +1,68 @@
+# ============================================================
+# FacturaExpress - Orquestacion completa con Docker Compose
+# Levanta: MySQL 8 + API REST (backend) + Web (frontend/nginx)
+#
+# Requisitos previos:
+#   1. Copie .env.example a .env en la raiz y defina los secretos
+#   2. docker compose up --build
+#
+# La aplicacion queda disponible en http://localhost:4200
+# (nginx del frontend sirve la SPA y hace proxy de /api al backend)
+# ============================================================
+
+services:
+  # ---------- Base de datos ----------
+  db:
+    image: mysql:8.4
+    container_name: facturaexpress-db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Defina MYSQL_ROOT_PASSWORD en .env}
+      MYSQL_DATABASE: ${DB_NAME:-facturaexpress_apirest}
+      MYSQL_USER: ${DB_USER:-facturaexpress}
+      MYSQL_PASSWORD: ${DB_PASSWORD:?Defina DB_PASSWORD en .env}
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  # ---------- API REST ----------
+  api:
+    build: ./backend
+    container_name: facturaexpress-api
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_NAME: ${DB_NAME:-facturaexpress_apirest}
+      DB_USER: ${DB_USER:-facturaexpress}
+      DB_PASSWORD: ${DB_PASSWORD:?Defina DB_PASSWORD en .env}
+      JWT_SECRET: ${JWT_SECRET:?Defina JWT_SECRET en .env}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-8h}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:4200}
+      # El contenedor MySQL ya crea la BD: el seed no debe intentar crearla
+      DB_SKIP_CREATE: "1"
+    depends_on:
+      db:
+        condition: service_healthy
+    command: sh -c "node scripts/seed.js && node scripts/migrate.js && node server.js"
+    ports:
+      - "4000:4000"
+
+  # ---------- Frontend (SPA servida por nginx) ----------
+  frontend:
+    build: ./frontend
+    container_name: facturaexpress-web
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "4200:80"
+
+volumes:
+  db_data:

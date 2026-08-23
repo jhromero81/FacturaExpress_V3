@@ -1,0 +1,139 @@
+# ============================================================
+# FacturaExpress - Integracion continua (GitHub Actions)
+#  1. Pruebas unitarias del backend (node --test)
+#  2. Build de produccion del frontend Angular
+#  3. Suite end-to-end: API + MySQL real + coleccion Postman/Newman
+# ============================================================
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend-tests:
+    name: Pruebas unitarias del backend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Ejecutar pruebas unitarias
+        run: npm test
+
+  frontend-build:
+    name: Build del frontend Angular
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Compilar aplicacion (produccion)
+        run: npm run build -- --configuration production
+
+      - name: Subir artefacto de distribucion
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist/facturaexpress-frontend/browser
+          retention-days: 7
+
+  api-postman:
+    name: E2E API + MySQL + Postman (Newman)
+    runs-on: ubuntu-latest
+    needs: backend-tests
+
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: rootpass_ci
+          MYSQL_DATABASE: facturaexpress_apirest
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -prootpass_ci"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
+
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: "3306"
+      DB_USER: root
+      DB_PASSWORD: rootpass_ci
+      DB_NAME: facturaexpress_apirest
+      JWT_SECRET: secreto_de_pruebas_ci
+      NODE_ENV: test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Instalar dependencias del backend
+        working-directory: backend
+        run: npm ci
+
+      # La BD ya existe (servicio MySQL); el seed no debe intentar crearla
+      - name: Preparar esquema y datos de prueba
+        working-directory: backend
+        run: npm run db:seed
+        env:
+          DB_SKIP_CREATE: "1"
+
+      - name: Iniciar la API
+        working-directory: backend
+        run: |
+          nohup node server.js > /tmp/api.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:4000/api/health > /dev/null; then
+              echo "API lista"; exit 0
+            fi
+            sleep 1
+          done
+          echo "La API no respondio a tiempo"; cat /tmp/api.log; exit 1
+
+      - name: Ejecutar coleccion Postman (Newman)
+        run: |
+          npm install -g newman
+          newman run postman/collections/FacturaExpress-API-Express.postman_collection.json \
+            --reporters cli,junit \
+            --reporter-junit-export newman-report.xml
+
+      - name: Guardar reporte Newman
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: newman-report
+          path: newman-report.xml
+          retention-days: 7

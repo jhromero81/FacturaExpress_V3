@@ -49,6 +49,9 @@ colombianas (punto de venta, facturación con flujo DIAN, reportes y administrac
 
 ```
 FacturaExpress_V3/
+├── docker-compose.yml           # Orquestacion: MySQL + API + frontend
+├── .env.example                 # Plantilla de variables para Docker Compose
+├── .github/workflows/ci.yml     # CI: pruebas backend, build frontend y Newman
 ├── backend/                     # API REST Node.js + Express + MySQL
 │   ├── package.json             # Dependencias y scripts
 │   ├── .env.example             # Plantilla de variables de entorno
@@ -75,10 +78,13 @@ FacturaExpress_V3/
 │   │   ├── schema.sql           # Creación de BD y tablas
 │   │   └── seedData.js          # Datos iniciales para el seed
 │   ├── scripts/                 # setupDb.js, migrate.js, seed.js
+│   ├── Dockerfile               # Imagen Docker (Node 18 Alpine)
 │   └── test/                    # 5 suites (40 pruebas unitarias)
 ├── frontend/                    # Aplicación web Angular 22
 │   ├── proxy.conf.json          # /api → http://localhost:4000
 │   ├── angular.json             # Configuración del workspace
+│   ├── Dockerfile               # Imagen multi-stage (build + nginx)
+│   └── nginx.conf               # SPA + proxy /api al servicio api
 │   └── src/
 │       ├── styles.css           # Sistema de diseño (variables y temas)
 │       ├── environments/        # environment.ts / environment.development.ts
@@ -575,6 +581,19 @@ npm run build
 Para publicar el build, servir esa carpeta con cualquier servidor estático
 que redirija `/api` al backend (mismo origen).
 
+### Docker Compose (todo en uno)
+
+Levanta MySQL 8 + la API + el frontend (nginx) como un solo sistema:
+
+```bash
+cp .env.example .env      # defina MYSQL_ROOT_PASSWORD, DB_PASSWORD y JWT_SECRET
+docker compose up --build
+# → http://localhost:4200 (SPA)   http://localhost:4000/api/health (API)
+```
+
+El primer arranque ejecuta automáticamente `seed` (esquema + datos de
+prueba) y `migrate`; los datos persisten en el volumen `db_data`.
+
 ---
 
 ## 8. Pruebas con cURL
@@ -634,6 +653,16 @@ npx newman run postman/collections/FacturaExpress-API-Express.postman_collection
 
 Resultado verificado: **56 peticiones ejecutadas, 91 aserciones evaluadas, 0 fallos**.
 
+### 9.2b Integración continua (CI)
+
+El workflow `.github/workflows/ci.yml` se ejecuta en cada push/PR a `main`
+con tres trabajos:
+
+1. **Pruebas unitarias del backend** (`node --test`).
+2. **Build de producción del frontend Angular** (artefacto subido).
+3. **E2E completo**: MySQL 8 como servicio, esquema + seed, API en marcha y
+   colección Postman ejecutada con Newman (reporte JUnit como artefacto).
+
 ### 9.3 Verificación end-to-end (manual)
 
 Flujo integral probado en navegador contra la API real: login → dashboard →
@@ -675,11 +704,12 @@ Medidas implementadas para proteger la aplicación:
 | **Cookie httpOnly** | El token JWT viaja en la cookie `token` con `HttpOnly` y `SameSite=Lax`, inmune a XSS (JavaScript no puede leerla). |
 | **Cookie `Secure`** | Con `NODE_ENV=production` la cookie solo viaja por HTTPS. |
 | **Helmet** | Cabeceras HTTP de seguridad: CSP, `X-Frame-Options`, `X-Content-Type-Options`, HSTS, etc. (`server.js`). |
-| **Límite de peticiones** | Login: 5 intentos/15 min por IP (`loginLimiter`). API general: 120 peticiones/min por IP (`apiLimiter`). Responden `429`. |
+| **Límite de peticiones** | Login: 5 intentos/15 min por IP (`loginLimiter`). API anónima: 120 peticiones/min por IP (`apiLimiter`). Clientes autenticados (cookie/Bearer): 600/min (`apiAuthLimiter`). `/api/health` exenta para monitoreo. Responden `429`. |
 | **Validación de entrada** | `express-validator` valida tipos, formatos y rangos antes del controlador; responde `400` con la lista de campos (`middleware/validate.js`). |
 | **Autorización por roles** | Middleware `authorize('admin')` en los módulos administrativos + `adminGuard` en las rutas del frontend. |
 | **Errores sin detalles** | En producción los errores `500` devuelven *"Error interno del servidor."*; el detalle solo se registra en consola (`middleware/errorHandler.js`). |
-| **Secreto JWT obligatorio** | Con `NODE_ENV=production` la API **no arranca** si falta `JWT_SECRET` (`config/jwt.js`). |
+| **Secreto JWT obligatorio** | Con `NODE_ENV=production` la API **no arranca** si falta `JWT_SECRET` (`config/jwt.js`). En desarrollo, si no está definido, se genera uno aleatorio por proceso (nunca viaja un secreto conocido en el código). |
+| **Revocación de sesiones** | Cada token lleva un `jti` único; el logout lo registra en la tabla `tokens_revocados` y el middleware lo rechaza aunque el JWT siga criptográficamente vigente (`middleware/auth.js`, `controllers/auth.controller.js`). |
 | **Consultas parametrizadas** | `mysql2` con `?` en todos los queries (anti-SQL injection). |
 | **Cifrado de contraseñas** | `bcryptjs` (nunca se guardan en texto plano). |
 | **CORS restringido** | Solo el origen configurado en `CORS_ORIGIN` puede consumir la API con credenciales. |

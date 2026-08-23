@@ -44,10 +44,20 @@ async function ejecutarEsquema(connection) {
   const schemaPath = path.join(__dirname, '..', 'db', 'schema.sql');
   const schema = fs.readFileSync(schemaPath, 'utf8');
 
-  const sentencias = schema
+  const omitirCreacionBd = process.env.DB_SKIP_CREATE === '1';
+
+  let sentencias = schema
     .split(';')
     .map((s) => s.trim())
     .filter((s) => s.length > 0);
+
+  // En contenedores (docker-compose) la base de datos ya existe y el
+  // usuario de la app no tiene privilegio global CREATE DATABASE.
+  if (omitirCreacionBd) {
+    sentencias = sentencias.filter(
+      (s) => !/^CREATE DATABASE|^USE /i.test(s.replace(/^--.*$/gm, '').trim())
+    );
+  }
 
   for (const sentencia of sentencias) {
     try {

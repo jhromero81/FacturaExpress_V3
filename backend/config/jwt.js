@@ -5,6 +5,7 @@
  * los controladores no dependan directamente de jsonwebtoken.
  */
 
+const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const dotenv = require('dotenv');
 
@@ -13,15 +14,27 @@ dotenv.config();
 const NODE_ENV = process.env.NODE_ENV || 'development';
 
 // En produccion el secreto es obligatorio: un valor por defecto conocido
-// permitiria falsificar tokens. La API se detiene si no esta configurado.
+// permitia falsificar tokens. La API se detiene si no esta configurado.
 if (NODE_ENV === 'production' && !process.env.JWT_SECRET) {
   throw new Error(
     '[security] JWT_SECRET es obligatorio en produccion. Definalo en las variables de entorno.'
   );
 }
 
-/** Secreto para firmar los tokens (desde variables de entorno) */
-const JWT_SECRET = process.env.JWT_SECRET || 'facturaexpress_secret_secreto';
+/**
+ * Secreto para firmar los tokens (desde variables de entorno).
+ * En desarrollo, si no esta definido, se genera uno aleatorio por
+ * proceso: evita viajar con un secreto conocido en el codigo fuente.
+ * Consecuencia: las sesiones se invalidan al reiniciar la API.
+ */
+let JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  JWT_SECRET = crypto.randomBytes(48).toString('hex');
+  console.warn(
+    '[security] JWT_SECRET no definido: se genero un secreto aleatorio temporal ' +
+      '(las sesiones expiran al reiniciar). Definalo en el archivo .env para persistencia.'
+  );
+}
 /** Tiempo de expiracion del token (ej: 8h, 1d) */
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '8h';
 
@@ -46,11 +59,15 @@ const COOKIE_MAX_AGE_MS = parseDurationToMs(JWT_EXPIRES_IN);
 
 /**
  * Genera un token JWT para un usuario.
+ * Incluye un identificador unico (jti) que permite revocar el
+ * token individualmente (lista de tokens_revocados en logout).
  * @param {object} payload - Datos que viajan dentro del token.
  * @returns {string} Token firmado.
  */
 function generateToken(payload) {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+  return jwt.sign({ ...payload, jti: crypto.randomUUID() }, JWT_SECRET, {
+    expiresIn: JWT_EXPIRES_IN,
+  });
 }
 
 /**

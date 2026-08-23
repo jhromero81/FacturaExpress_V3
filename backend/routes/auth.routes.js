@@ -16,7 +16,7 @@ const router = Router();
 // POST /api/auth/login - Inicio de sesion (publica, con limite de intentos)
 router.post('/login', loginLimiter, loginValidator, validate, login);
 
-// POST /api/auth/logout - Cierre de sesion (limpia la cookie httpOnly)
+// POST /api/auth/logout - Cierre de sesion (revoca el JWT y limpia la cookie)
 router.post('/logout', logout);
 
 // GET /api/auth/me - Usuario autenticado (protegida)

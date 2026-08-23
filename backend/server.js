@@ -16,7 +16,7 @@ const dotenv = require('dotenv');
 
 const { testConnection } = require('./config/db');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
-const { apiLimiter } = require('./middleware/security');
+const { apiLimiter, apiAuthLimiter } = require('./middleware/security');
 
 // Rutas de cada modulo del sistema
 const authRoutes = require('./routes/auth.routes');
@@ -47,8 +47,12 @@ app.use(cookieParser());
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// Limite general de peticiones para toda la API
+// Limites de peticiones para toda la API:
+//  - apiLimiter: anonimos (120/min por IP)
+//  - apiAuthLimiter: autenticados (600/min, sesion cookie o Bearer)
+// La ruta /health queda exenta para monitoreo ininterrumpido.
 app.use('/api', apiLimiter);
+app.use('/api', apiAuthLimiter);
 
 // Endpoint de salud: verifica que la API este respondiendo
 app.get('/api/health', (req, res) => {

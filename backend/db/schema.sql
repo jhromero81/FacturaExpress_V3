@@ -201,6 +201,19 @@ CREATE TABLE IF NOT EXISTS backups (
     FOREIGN KEY (usuario_id) REFERENCES usuarios (id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
+-- ------------------------------------------------------------
+-- Tabla: tokens_revocados
+-- Lista de revocacion de sesiones JWT: guarda el identificador
+-- unico (jti) de cada token invalidado en logout junto con su
+-- fecha de expiracion, para rechazarlo aunque la cookie haya
+-- sido copiada y el token siga criptograficamente vigente.
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS tokens_revocados (
+  jti        VARCHAR(64) NOT NULL PRIMARY KEY,
+  expira_en  DATETIME    NOT NULL,
+  created_at TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
 -- Indices auxiliares para busquedas frecuentes
 CREATE INDEX idx_facturas_estado ON facturas (estado);
 CREATE INDEX idx_facturas_fecha  ON facturas (fecha);

@@ -7,7 +7,7 @@
  *   - Cambio del ENUM de estado (enviado/rechazado/procesando/anulada ->
  *     pendiente/enviada/rechazada), alineado al modelo Java.
  *   - Creacion de las tablas errores_sistema, logs_auditoria,
- *     reportes y backups.
+ *     reportes, backups y tokens_revocados.
  *
  * Uso: npm run db:migrate
  */
@@ -179,6 +179,12 @@ async function main() {
           created_at  TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
           CONSTRAINT fk_backups_usuario
             FOREIGN KEY (usuario_id) REFERENCES usuarios (id) ON DELETE SET NULL
+        ) ENGINE=InnoDB`,
+      tokens_revocados: `
+        CREATE TABLE IF NOT EXISTS tokens_revocados (
+          jti        VARCHAR(64) NOT NULL PRIMARY KEY,
+          expira_en  DATETIME    NOT NULL,
+          created_at TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP
         ) ENGINE=InnoDB`,
     };
 

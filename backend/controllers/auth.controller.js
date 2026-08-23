@@ -7,7 +7,7 @@
 
 const bcrypt = require('bcryptjs');
 const { pool } = require('../config/db');
-const { generateToken, COOKIE_MAX_AGE_MS } = require('../config/jwt');
+const { generateToken, verifyToken, COOKIE_MAX_AGE_MS } = require('../config/jwt');
 const { asyncHandler, createHttpError } = require('../middleware/errorHandler');
 
 /** La cookie de sesion solo viaja por HTTPS en produccion */
@@ -88,9 +88,41 @@ const login = asyncHandler(async (req, res) => {
 
 /**
  * POST /api/auth/logout
- * Cierra la sesion invalidando la cookie httpOnly del cliente.
+ * Cierra la sesion invalidando la cookie httpOnly del cliente y
+ * revocando el token JWT actual: su identificador unico (jti) se
+ * registra en tokens_revocados hasta su fecha de expiracion, de
+ * modo que reutilizarlo (cookie copiada o header Bearer) devuelve 401.
  */
 const logout = asyncHandler(async (req, res) => {
+  // La ruta logout es publica: el token llega por cookie o Bearer y se
+  // verifica de forma tolerante (no falla si esta ausente o vencido).
+  const authHeader = req.headers.authorization || '';
+  const tokenCrudo = authHeader.startsWith('Bearer ')
+    ? authHeader.slice(7)
+    : req.cookies?.token;
+
+  let payload = null;
+  if (tokenCrudo) {
+    try {
+      payload = verifyToken(tokenCrudo);
+    } catch {
+      payload = null; // token invalido/vencido: nada que revocar
+    }
+  }
+
+  const { jti, exp } = payload || {};
+
+  if (jti && exp) {
+    // Limpiar entradas ya expiradas y revocar el token actual.
+    // INSERT IGNORE tolera logouts repetidos con el mismo token.
+    await pool.query(
+      `INSERT IGNORE INTO tokens_revocados (jti, expira_en)
+       VALUES (?, FROM_UNIXTIME(?))`,
+      [jti, exp]
+    );
+    await pool.query('DELETE FROM tokens_revocados WHERE expira_en < NOW()');
+  }
+
   res.clearCookie('token', {
     httpOnly: true,
     secure: COOKIE_SECURE,
