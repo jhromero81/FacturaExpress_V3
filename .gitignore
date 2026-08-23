@@ -1,0 +1,28 @@
+# Dependencias
+node_modules/
+
+# Variables de entorno (contienen secretos)
+.env
+.env.local
+.env.*.local
+
+# Compilados / distribucion
+dist/
+.angular/
+coverage/
+
+# Registros y salidas locales
+*.log
+logs/
+newman-report.json
+
+# Sistema operativo y editores
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Respaldos generados en tiempo de ejecucion
+backups/
+*.sql.bak

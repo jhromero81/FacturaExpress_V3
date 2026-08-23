@@ -1,0 +1,117 @@
+/**
+ * features/layout/layout.component.ts
+ * Layout principal para paginas autenticadas: barra lateral fija con
+ * navegacion dividida en secciones Principal y Administracion, barra
+ * superior con estado DIAN y controles de accesibilidad, pie de pagina
+ * global y modal de confirmacion de cierre de sesion.
+ */
+
+import { Component, computed, inject, signal } from '@angular/core';
+import { ChangeDetectorRef } from '@angular/core';
+import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { AuthService } from '../../core/auth.service';
+import { ServicioRender } from '../../core/render.service';
+import { ToastService } from '../../core/toast.service';
+import { nombreRol } from '../../core/formatters';
+
+interface ItemMenu {
+  ruta: string;
+  icono: string;
+  etiqueta: string;
+}
+
+@Component({
+  selector: 'app-layout',
+  standalone: true,
+  imports: [RouterOutlet, RouterLink, RouterLinkActive],
+  templateUrl: './layout.component.html',
+  styleUrls: ['./layout.component.css'],
+})
+export class LayoutComponent {
+  readonly auth = inject(AuthService);
+  readonly toasts = inject(ToastService);
+  private readonly render = inject(ServicioRender);
+
+  /** Control de visibilidad del modal de cierre de sesion. */
+  readonly mostrarModalSalida = signal(false);
+
+  /** Estado de "cerrando sesion" para la animacion del modal. */
+  readonly cerrandoSesion = signal(false);
+
+  /**
+   * Registra la vista del componente hijo activo para que el
+   * ServicioRender pueda refrescarla tras respuestas HTTP.
+   */
+  componenteActivado(instancia: { cdr?: ChangeDetectorRef } | null): void {
+    this.render.establecerActivo(instancia?.cdr ?? null);
+  }
+
+  componenteDesactivado(): void {
+    this.render.establecerActivo(null);
+  }
+
+  private readonly menuPrincipal: ItemMenu[] = [
+    { ruta: '/dashboard', icono: 'dashboard', etiqueta: 'Panel Principal' },
+    { ruta: '/ventas', icono: 'shopping_cart', etiqueta: 'Gestion de Ventas' },
+    { ruta: '/facturas', icono: 'description', etiqueta: 'Facturacion Electronica' },
+    { ruta: '/clientes', icono: 'group', etiqueta: 'Clientes' },
+    { ruta: '/productos', icono: 'inventory_2', etiqueta: 'Inventario' },
+    { ruta: '/reportes', icono: 'bar_chart', etiqueta: 'Reportes y Estadisticas' },
+  ];
+
+  private readonly menuAdministracion: ItemMenu[] = [
+    { ruta: '/errores', icono: 'error_outline', etiqueta: 'Errores del Sistema' },
+    { ruta: '/auditoria', icono: 'fact_check', etiqueta: 'Auditoria' },
+    { ruta: '/usuarios', icono: 'admin_panel_settings', etiqueta: 'Usuarios' },
+    { ruta: '/backup', icono: 'backup', etiqueta: 'Respaldos' },
+    { ruta: '/configuracion', icono: 'settings', etiqueta: 'Configuracion' },
+  ];
+
+  /** Items visibles segun el rol del usuario autenticado. */
+  readonly itemsPrincipales = computed(() => this.menuPrincipal);
+
+  readonly itemsAdministracion = computed(() =>
+    this.auth.esAdmin() ? this.menuAdministracion : []
+  );
+
+  /** Rol legible del usuario actual. */
+  get rolUsuario(): string {
+    return nombreRol(this.auth.usuario()?.rol);
+  }
+
+  /** Anio en curso para el pie de pagina. */
+  get anioActual(): number {
+    return new Date().getFullYear();
+  }
+
+  /** Duracion legible de la sesion actual (ej: "2h 15min"). */
+  get duracionSesion(): string {
+    const login = this.auth.loginTime();
+    if (!login) return 'Desconocido';
+    const diff = Date.now() - new Date(login).getTime();
+    const minutos = Math.floor(diff / 60000);
+    const horas = Math.floor(minutos / 60);
+    if (horas > 0) return `${horas}h ${minutos % 60}min`;
+    return `${minutos} min`;
+  }
+
+  abrirModalSalida(): void {
+    this.mostrarModalSalida.set(true);
+  }
+
+  cerrarModalSalida(): void {
+    if (!this.cerrandoSesion()) {
+      this.mostrarModalSalida.set(false);
+    }
+  }
+
+  /** Ejecuta el cierre de sesion tras una pequena animacion de carga. */
+  confirmarSalida(): void {
+    this.cerrandoSesion.set(true);
+    setTimeout(() => {
+      this.mostrarModalSalida.set(false);
+      this.cerrandoSesion.set(false);
+      this.auth.logout();
+    }, 800);
+  }
+}

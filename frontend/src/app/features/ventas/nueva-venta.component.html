@@ -1,0 +1,271 @@
+<div class="ventas-page">
+  <div class="ventas-layout">
+    <!-- Panel izquierdo: formulario de venta -->
+    <div class="ventas-form-panel">
+      <!-- Indicador de carga del catalogo -->
+      @if (loading) {
+        <div class="empty-state">
+          <span class="material-icons">sync</span>
+          <p>Cargando catalogo de productos y clientes...</p>
+        </div>
+      } @else if (errorCatalogo) {
+        <div class="empty-state">
+          <span class="material-icons">cloud_off</span>
+          <p>No fue posible cargar el catalogo de productos y clientes.</p>
+          <button type="button" class="btn-teal" (click)="cargarCatalogo()">Reintentar</button>
+        </div>
+      }
+
+      <!-- Botones de accion principal -->
+      <div class="ventas-actions">
+        <button class="btn-teal" (click)="nuevaVenta()" [disabled]="loading">
+          <span class="material-icons">add_shopping_cart</span>
+          Nueva Venta
+        </button>
+        <button class="btn-outline-accent" (click)="showClientModal = true" [disabled]="loading">
+          <span class="material-icons">person_add</span>
+          Cambiar Cliente
+        </button>
+      </div>
+
+      <!-- Busqueda de cliente: campos separados de NIT y nombre -->
+      <div class="ventas-client-search">
+        <div class="form-group">
+          <label>NIT del cliente</label>
+          <div class="search-input-wrapper">
+            <span class="material-icons">badge</span>
+            <input type="text" placeholder="Digite el NIT..." [(ngModel)]="clientNitSearch" name="nitBusqueda" />
+          </div>
+
+          <!-- Sugerencias por NIT -->
+          @if (clientNitSearch.trim()) {
+            <div class="search-suggestions">
+              @if (filteredClientesNit.length === 0) {
+                <p class="suggestion-name" style="padding: 10px 14px">Sin resultados para "{{ clientNitSearch }}"</p>
+              }
+              @for (c of filteredClientesNit; track c.id) {
+                <button
+                  type="button"
+                  class="suggestion-item"
+                  (click)="selectClient(c); clientNitSearch = ''"
+                >
+                  <span class="suggestion-name">{{ c.nombre }}</span>
+                  <span class="suggestion-price font-mono">{{ c.identificacion }}</span>
+                </button>
+              }
+            </div>
+          }
+        </div>
+
+        <div class="form-group">
+          <label>Nombre del cliente</label>
+          <div class="search-input-wrapper">
+            <span class="material-icons">person_search</span>
+            <input type="text" placeholder="Digite el nombre..." [(ngModel)]="clientNameSearch" name="nombreBusqueda" />
+          </div>
+
+          <!-- Sugerencias por nombre -->
+          @if (clientNameSearch.trim()) {
+            <div class="search-suggestions">
+              @if (filteredClientesNombre.length === 0) {
+                <p class="suggestion-name" style="padding: 10px 14px">Sin resultados para "{{ clientNameSearch }}"</p>
+              }
+              @for (c of filteredClientesNombre; track c.id) {
+                <button
+                  type="button"
+                  class="suggestion-item"
+                  (click)="selectClient(c); clientNameSearch = ''"
+                >
+                  <span class="suggestion-name">{{ c.nombre }}</span>
+                  <span class="suggestion-price font-mono">{{ c.identificacion }}</span>
+                </button>
+              }
+            </div>
+          }
+        </div>
+      </div>
+
+      <!-- Cliente seleccionado para la venta -->
+      @if (cliente; as cli) {
+        <div class="ventas-client-info">
+          <div class="form-group">
+            <label>Cliente (NIT)</label>
+            <input type="text" [value]="cli.identificacion" readonly placeholder="NIT del cliente" />
+          </div>
+          <div class="form-group">
+            <label>Nombre</label>
+            <input type="text" [value]="cli.nombre" readonly placeholder="Nombre del cliente" />
+          </div>
+        </div>
+      } @else {
+        <div class="ventas-client-info">
+          <p class="suggestion-name">No hay cliente seleccionado para la venta.</p>
+        </div>
+      }
+
+      <!-- Busqueda y adicion de productos -->
+      <div class="ventas-product-search">
+        <div class="search-input-wrapper">
+          <span class="material-icons">barcode</span>
+          <input
+            type="text"
+            placeholder="Buscar producto por nombre o codigo..."
+            [(ngModel)]="searchTerm"
+            name="productoBusqueda"
+          />
+        </div>
+
+        <!-- Sugerencias de productos -->
+        @if (filteredProducts.length > 0) {
+          <div class="search-suggestions">
+            @for (p of filteredProducts; track p.id) {
+              <button type="button" class="suggestion-item" (click)="addToCart(p); searchTerm = ''">
+                <span class="suggestion-name">{{ p.nombre }}</span>
+                <span class="suggestion-price font-mono">{{ money(p.precio) }}</span>
+              </button>
+            }
+          </div>
+        }
+      </div>
+
+      <!-- Tabla de items en el carrito -->
+      <div class="cart-table-container">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Producto</th>
+              <th>Precio</th>
+              <th>Cantidad</th>
+              <th>Subtotal</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            @if (cart.length === 0) {
+              <tr>
+                <td colspan="5" class="empty-cart">
+                  <span class="material-icons">shopping_cart</span>
+                  <p>Carrito vacio. Busque y agregue productos.</p>
+                </td>
+              </tr>
+            } @else {
+              @for (item of cart; track item.id) {
+                <tr>
+                  <td>
+                    <div class="product-name-cell">
+                      <span class="product-name">{{ item.nombre }}</span>
+                      <span class="product-code font-mono">{{ item.codigo }}</span>
+                    </div>
+                  </td>
+                  <td class="amount-cell font-mono">{{ money(item.precio) }}</td>
+                  <td>
+                    <div class="qty-controls">
+                      <button type="button" class="qty-btn" (click)="decrementQty(item.id)">-</button>
+                      <span class="qty-value font-mono">{{ item.cantidad }}</span>
+                      <button type="button" class="qty-btn" (click)="incrementQty(item.id)">+</button>
+                    </div>
+                  </td>
+                  <td class="amount-cell font-mono">{{ money(item.precio * item.cantidad) }}</td>
+                  <td>
+                    <button type="button" class="qty-btn delete-btn" (click)="removeFromCart(item.id)">
+                      <span class="material-icons">delete</span>
+                    </button>
+                  </td>
+                </tr>
+              }
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Panel derecho: resumen de pago -->
+    <div class="payment-panel">
+      <h3 class="payment-title">Resumen de Pago</h3>
+
+      <div class="payment-rows">
+        <div class="payment-row">
+          <span>Subtotal</span>
+          <span class="font-mono">{{ money(subtotal) }}</span>
+        </div>
+        <div class="payment-row discount-input">
+          <label for="descuento-venta">Descuento (%)</label>
+          <input
+            id="descuento-venta"
+            type="number"
+            min="0"
+            max="100"
+            step="1"
+            [value]="descuentoPct"
+            (input)="descuentoPct = Math.min(Math.max(+$any($event.target).value || 0, 0), 100)"
+            placeholder="0"
+          />
+        </div>
+        @if (montoDescuento > 0) {
+          <div class="payment-row discount">
+            <span>Descuento ({{ descuentoPct }}%)</span>
+            <span class="font-mono">-{{ money(montoDescuento) }}</span>
+          </div>
+        }
+        <div class="payment-row">
+          <span>IVA (19%)</span>
+          <span class="font-mono">{{ money(iva) }}</span>
+        </div>
+      </div>
+
+      <div class="payment-divider"></div>
+
+      <div class="payment-total">
+        <span>Total</span>
+        <span class="total-val font-mono">{{ money(total) }}</span>
+      </div>
+
+      <button class="btn-finalizar" (click)="finalizeSale()" [disabled]="isFinalizing">
+        {{ isFinalizing ? 'PROCESANDO...' : 'FINALIZAR VENTA' }}
+      </button>
+
+      <p class="payment-note">Genera XML y PDF automaticamente</p>
+    </div>
+  </div>
+
+  <!-- Modal de seleccion de cliente -->
+  @if (showClientModal) {
+    <div class="modal-overlay open" (click)="showClientModal = false">
+      <div class="modal-content" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <h3>Seleccionar Cliente</h3>
+        </div>
+        <div class="modal-body">
+          <!-- Busqueda de clientes por NIT o nombre -->
+          <div class="search-input-wrapper">
+            <span class="material-icons">search</span>
+            <input
+              type="text"
+              placeholder="Buscar por NIT o nombre..."
+              [(ngModel)]="clientModalSearch"
+              name="modalBusqueda"
+            />
+          </div>
+
+          <div class="client-list-modal">
+            @if (filteredModalClientes.length === 0) {
+              <p class="suggestion-name" style="padding: 14px">Sin resultados para "{{ clientModalSearch }}"</p>
+            }
+            @for (c of filteredModalClientes; track c.id) {
+              <button type="button" class="client-option" [class.selected]="cliente?.id === c.id" (click)="selectClient(c)">
+                <span class="material-icons">account_circle</span>
+                <div class="client-option-info">
+                  <span class="client-option-name">{{ c.nombre }}</span>
+                  <span class="client-option-id font-mono">{{ c.identificacion }}</span>
+                </div>
+              </button>
+            }
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-flat" (click)="showClientModal = false">Cancelar</button>
+        </div>
+      </div>
+    </div>
+  }
+</div>

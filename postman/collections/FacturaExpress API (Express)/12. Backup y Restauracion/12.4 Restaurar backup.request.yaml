@@ -1,0 +1,21 @@
+$kind: http-request
+url: "{{baseUrl}}/backup/restaurar"
+method: POST
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{token}}
+body:
+  type: text
+  content: |-
+    {
+      "archivo": "{{archivoBackup}}"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Backup restaurado (HTTP 200)', function () {
+          pm.response.to.have.status(200);
+          pm.expect(pm.response.json().success).to.be.true;
+      });
+    language: text/javascript
+order: 4000

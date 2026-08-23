@@ -1,0 +1,14 @@
+$kind: http-request
+url: "{{baseUrl}}/usuarios"
+method: GET
+headers:
+  Authorization: Bearer {{token}}
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Listado de usuarios (HTTP 200)', function () {
+          pm.response.to.have.status(200);
+          pm.expect(pm.response.json().usuarios).to.be.an('array');
+      });
+    language: text/javascript
+order: 1000

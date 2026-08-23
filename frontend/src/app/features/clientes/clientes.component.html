@@ -1,0 +1,137 @@
+<div class="clientes-page">
+  <!-- Barra de herramientas -->
+  <div class="clientes-toolbar">
+    <div class="search-wrapper">
+      <span class="material-icons">search</span>
+      <input
+        type="text"
+        placeholder="Buscar cliente por nombre, NIT o email..."
+        [value]="searchTerm"
+        (input)="onSearch($any($event.target).value)"
+      />
+    </div>
+
+    <button type="button" class="btn-teal" (click)="showModal = true">
+      <span class="material-icons">person_add</span>
+      NUEVO CLIENTE
+    </button>
+  </div>
+
+  <!-- Grid de tarjetas de clientes -->
+  <div class="clientes-grid">
+    @if (loading) {
+      <div class="empty-state">
+        <span class="material-icons">sync</span>
+        <p>Cargando clientes...</p>
+      </div>
+    } @else if (filteredClientes.length === 0) {
+      <div class="empty-state">
+        <span class="material-icons">group</span>
+        <p>No se encontraron clientes</p>
+      </div>
+    } @else {
+      @for (cliente of filteredClientes; track cliente.id) {
+        <div class="client-card">
+          <div class="client-card-header">
+            <span class="material-icons client-avatar">account_circle</span>
+            <span class="client-id font-mono">{{ cliente.identificacion }}</span>
+          </div>
+          <h4 class="client-name">{{ cliente.nombre }}</h4>
+          <p class="client-email">{{ cliente.email || 'Sin email' }}</p>
+          <div class="client-card-actions">
+            <button type="button" class="client-action-link" (click)="goToSale(cliente)">
+              <span class="material-icons">shopping_cart</span>
+              Nueva Venta
+            </button>
+            <button type="button" class="client-action-icon" (click)="openEdit(cliente)" title="Editar cliente">
+              <span class="material-icons">edit</span>
+            </button>
+            <button type="button" class="client-action-icon" (click)="handleDelete(cliente)" title="Eliminar cliente">
+              <span class="material-icons">delete</span>
+            </button>
+          </div>
+        </div>
+      }
+    }
+  </div>
+
+  <!-- Modal de nuevo/editar cliente -->
+  <div
+    class="modal-overlay"
+    [class.open]="showModal"
+    (click)="cerrarModal()"
+  >
+    <div class="modal-content" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3>{{ editingId ? 'Editar Cliente' : 'Nuevo Cliente' }}</h3>
+      </div>
+      <div class="modal-body">
+        <!-- Campo identificacion -->
+        <div class="form-group">
+          <label>Numero de Identificacion *</label>
+          <input
+            type="text"
+            placeholder="Ej: 80.123.456-1"
+            [value]="formData.identificacion"
+            (input)="handleChange('identificacion', $any($event.target).value)"
+            [class.input-error]="errors['identificacion']"
+          />
+          @if (errors['identificacion']) {
+            <span class="error-text">{{ errors['identificacion'] }}</span>
+          }
+        </div>
+
+        <!-- Campo nombre -->
+        <div class="form-group">
+          <label>Nombre Completo *</label>
+          <input
+            type="text"
+            placeholder="Razon social o nombre completo"
+            [value]="formData.nombre"
+            (input)="handleChange('nombre', $any($event.target).value)"
+            [class.input-error]="errors['nombre']"
+          />
+          @if (errors['nombre']) {
+            <span class="error-text">{{ errors['nombre'] }}</span>
+          }
+        </div>
+
+        <!-- Campo email -->
+        <div class="form-group">
+          <label>Correo Electronico</label>
+          <input
+            type="email"
+            placeholder="correo@empresa.com"
+            [value]="formData.email"
+            (input)="handleChange('email', $any($event.target).value)"
+            [class.input-error]="errors['email']"
+          />
+          @if (errors['email']) {
+            <span class="error-text">{{ errors['email'] }}</span>
+          }
+        </div>
+
+        <!-- Campo telefono -->
+        <div class="form-group">
+          <label>Telefono</label>
+          <input
+            type="tel"
+            placeholder="+57 300 123 4567"
+            [value]="formData.telefono"
+            (input)="handleChange('telefono', $any($event.target).value)"
+            [class.input-error]="errors['telefono']"
+          />
+          @if (errors['telefono']) {
+            <span class="error-text">{{ errors['telefono'] }}</span>
+          }
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-cancel-compact" (click)="cerrarModal()">Cancelar</button>
+        <button type="button" class="btn-teal" (click)="handleSave()">
+          {{ editingId ? 'Actualizar' : 'Guardar' }}
+        </button>
+      </div>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,182 @@
+<div class="main-layout">
+  <!-- Barra lateral de navegacion -->
+  <aside class="sidebar">
+    <!-- Logo y nombre de la aplicacion -->
+    <div class="sidebar-logo">
+      <div class="logo-box">F</div>
+      <span class="logo-text">FacturaExpress</span>
+    </div>
+
+    <!-- Lista de navegacion -->
+    <nav class="sidebar-nav">
+      <span class="nav-grupo">Principal</span>
+      @for (item of itemsPrincipales(); track item.ruta) {
+        <a
+          class="sidebar-link"
+          [routerLink]="item.ruta"
+          routerLinkActive="active"
+          [routerLinkActiveOptions]="{ exact: item.ruta === '/dashboard' }"
+        >
+          <span class="material-icons">{{ item.icono }}</span>
+          <span class="link-label">{{ item.etiqueta }}</span>
+        </a>
+      }
+
+      @if (itemsAdministracion().length > 0) {
+        <span class="nav-grupo">Administracion</span>
+        @for (item of itemsAdministracion(); track item.ruta) {
+          <a class="sidebar-link" [routerLink]="item.ruta" routerLinkActive="active">
+            <span class="material-icons">{{ item.icono }}</span>
+            <span class="link-label">{{ item.etiqueta }}</span>
+          </a>
+        }
+      }
+    </nav>
+
+    <!-- Seccion inferior con usuario y logout -->
+    <div class="sidebar-footer">
+      @if (auth.usuario(); as usuario) {
+        <div class="sidebar-user">
+          <span class="material-icons user-avatar">account_circle</span>
+          <div class="user-info">
+            <span class="user-name">{{ usuario.nombre }}</span>
+            <span class="user-role">{{ rolUsuario }}</span>
+          </div>
+        </div>
+      }
+      <button class="sidebar-logout" (click)="abrirModalSalida()">
+        <span class="material-icons">logout</span>
+        <span>Cerrar Sesion</span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- Contenedor del contenido principal -->
+  <div class="app-layout">
+    <!-- Barra superior -->
+    <header class="topbar">
+      <h1 class="topbar-title font-mono">FacturaExpress</h1>
+
+      <!-- Indicador de estado DIAN -->
+      <div class="topbar-dian">
+        <span class="pulse-dot"></span>
+        <span class="dian-text">DIAN SINCRONIZADO</span>
+      </div>
+
+      <!-- Controles de accesibilidad e informacion de usuario -->
+      <div class="topbar-right">
+        <button
+          type="button"
+          class="topbar-icon-btn"
+          (click)="auth.alternarModoOscuro()"
+          [title]="auth.preferencias().modoOscuro ? 'Desactivar modo oscuro' : 'Activar modo oscuro'"
+        >
+          <span class="material-icons">{{ auth.preferencias().modoOscuro ? 'light_mode' : 'dark_mode' }}</span>
+        </button>
+
+        <button
+          type="button"
+          class="topbar-icon-btn"
+          (click)="auth.alternarAltoContraste()"
+          [title]="auth.preferencias().altoContraste ? 'Desactivar alto contraste' : 'Activar alto contraste'"
+        >
+          <span class="material-icons">contrast</span>
+        </button>
+
+        @if (auth.usuario(); as usuario) {
+          <div class="topbar-user">
+            <span class="topbar-user-name">{{ usuario.nombre }}</span>
+            <span class="material-icons topbar-user-icon">account_circle</span>
+          </div>
+        }
+      </div>
+    </header>
+
+    <!-- Area de contenido - renderiza la ruta hijo -->
+    <main class="main-content">
+      <router-outlet (activate)="componenteActivado($event)" (deactivate)="componenteDesactivado()" />
+    </main>
+
+    <!-- Pie de pagina -->
+    <footer class="app-footer">
+      <div class="footer-left">
+        <span>&copy; {{ anioActual }} FACTURAEXPRESS &mdash; FACTURACION SEGURA</span>
+      </div>
+
+      <div class="footer-right">
+        <div class="footer-status">
+          <span class="pulse-dot"></span>
+          <span>MOTOR FISCAL ACTIVO</span>
+        </div>
+        <div class="footer-status">
+          <span class="pulse-dot"></span>
+          <span>BACKUPS AL DIA</span>
+        </div>
+      </div>
+    </footer>
+  </div>
+
+  <!-- Modal de confirmacion de cierre de sesion -->
+  @if (mostrarModalSalida()) {
+    <div class="modal-overlay open" (click)="cerrarModalSalida()">
+      <div class="logout-modal" (click)="$event.stopPropagation()">
+        <!-- Encabezado con gradiente oscuro -->
+        <div class="logout-header">
+          <span class="material-icons logout-header-icon">exit_to_app</span>
+          <h3>&iquest;Cerrar sesion?</h3>
+        </div>
+
+        <!-- Cuerpo del modal -->
+        <div class="logout-body">
+          <!-- Aviso de cambios sin guardar -->
+          <div class="logout-warning">
+            <span class="material-icons">warning</span>
+            <span>Se cerrara tu sesion actual. Asegurate de haber guardado todos los cambios.</span>
+          </div>
+
+          <!-- Informacion de la sesion -->
+          <div class="logout-session-info">
+            <div class="session-row">
+              <span class="session-label">Usuario</span>
+              <span class="session-value">{{ auth.usuario()?.nombre || 'N/A' }}</span>
+            </div>
+            <div class="session-row">
+              <span class="session-label">Rol</span>
+              <span class="session-value">{{ auth.usuario()?.rol || 'N/A' }}</span>
+            </div>
+            <div class="session-row">
+              <span class="session-label">Sesion activa</span>
+              <span class="session-value font-mono">{{ duracionSesion }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Pie con botones de accion -->
+        <div class="logout-footer">
+          <button type="button" class="btn-flat" (click)="cerrarModalSalida()" [disabled]="cerrandoSesion()">
+            Cancelar
+          </button>
+          <button type="button" class="btn-danger-compact" (click)="confirmarSalida()" [disabled]="cerrandoSesion()">
+            {{ cerrandoSesion() ? 'Cerrando...' : 'Salir Ahora' }}
+          </button>
+        </div>
+
+        <!-- Overlay de carga durante el cierre -->
+        @if (cerrandoSesion()) {
+          <div class="logout-loading">
+            <div class="logout-spinner"></div>
+          </div>
+        }
+      </div>
+    </div>
+  }
+</div>
+
+<!-- Contenedor global de notificaciones toast -->
+<div class="toast-container">
+  @for (toast of toasts.toasts(); track toast.id) {
+    <div class="toast" [class]="toast.tipo" (click)="toasts.cerrar(toast.id)">
+      {{ toast.mensaje }}
+    </div>
+  }
+</div>

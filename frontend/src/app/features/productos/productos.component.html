@@ -1,0 +1,185 @@
+<div class="productos-page">
+  <!-- Barra de herramientas -->
+  <div class="productos-toolbar">
+    <div class="search-wrapper">
+      <span class="material-icons">search</span>
+      <input
+        type="text"
+        placeholder="Buscar producto por nombre o codigo..."
+        [value]="searchTerm"
+        (input)="onSearch($any($event.target).value)"
+      />
+    </div>
+
+    <button type="button" class="btn-teal" (click)="openCreate()">
+      <span class="material-icons">add</span>
+      NUEVO PRODUCTO
+    </button>
+  </div>
+
+  <!-- Tabla de productos -->
+  <div class="content-card">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Codigo</th>
+          <th>Nombre</th>
+          <th>Precio</th>
+          <th>IVA</th>
+          <th>Stock</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        @if (loading) {
+          <tr>
+            <td colspan="6" class="empty-table">
+              <span class="material-icons">sync</span>
+              <p>Cargando catalogo...</p>
+            </td>
+          </tr>
+        } @else if (filteredProductos.length === 0) {
+          <tr>
+            <td colspan="6" class="empty-table">
+              <span class="material-icons">inventory_2</span>
+              <p>No se encontraron productos</p>
+            </td>
+          </tr>
+        } @else {
+          @for (producto of filteredProductos; track producto.id) {
+            <tr>
+              <td class="font-mono">{{ producto.codigo }}</td>
+              <td>{{ producto.nombre }}</td>
+              <td class="amount-cell font-mono">{{ money(producto.precio) }}</td>
+              <td>{{ Math.round(producto.iva * 100) }}%</td>
+              <td>
+                <span class="stock-badge" [class.low]="producto.stock <= 5">{{ producto.stock }}</span>
+              </td>
+              <td>
+                <div class="product-actions">
+                  <button type="button" class="action-btn" (click)="openEdit(producto)" title="Editar">
+                    <span class="material-icons">edit</span>
+                  </button>
+                  <button type="button" class="action-btn" (click)="abrirStock(producto)" title="Ajustar stock">
+                    <span class="material-icons">inventory</span>
+                  </button>
+                  <button type="button" class="action-btn danger" (click)="handleDelete(producto)" title="Eliminar">
+                    <span class="material-icons">delete</span>
+                  </button>
+                </div>
+              </td>
+            </tr>
+          }
+        }
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Modal de crear/editar producto -->
+  <div class="modal-overlay" [class.open]="showModal" (click)="cerrarModal()">
+    <div class="modal-content" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3>{{ editingId ? 'Editar Producto' : 'Nuevo Producto' }}</h3>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Codigo *</label>
+          <input
+            type="text"
+            placeholder="Ej: PROD006"
+            [value]="formData.codigo"
+            (input)="handleChange('codigo', $any($event.target).value)"
+            [class.input-error]="errors['codigo']"
+          />
+          @if (errors['codigo']) {
+            <span class="error-text">{{ errors['codigo'] }}</span>
+          }
+        </div>
+
+        <div class="form-group">
+          <label>Nombre *</label>
+          <input
+            type="text"
+            placeholder="Nombre del producto"
+            [value]="formData.nombre"
+            (input)="handleChange('nombre', $any($event.target).value)"
+            [class.input-error]="errors['nombre']"
+          />
+          @if (errors['nombre']) {
+            <span class="error-text">{{ errors['nombre'] }}</span>
+          }
+        </div>
+
+        <div class="form-row triple">
+          <div class="form-group">
+            <label>Precio (COP) *</label>
+            <input
+              type="number"
+              min="0"
+              step="1"
+              [value]="formData.precio"
+              (input)="handleChange('precio', $any($event.target).value)"
+              [class.input-error]="errors['precio']"
+            />
+            @if (errors['precio']) {
+              <span class="error-text">{{ errors['precio'] }}</span>
+            }
+          </div>
+
+          <div class="form-group">
+            <label>IVA (%)</label>
+            <select [value]="formData.iva" (change)="handleChange('iva', $any($event.target).value)">
+              <option value="0.19">19%</option>
+              <option value="0">0%</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label>Stock *</label>
+            <input
+              type="number"
+              min="0"
+              step="1"
+              [value]="formData.stock"
+              (input)="handleChange('stock', $any($event.target).value)"
+              [class.input-error]="errors['stock']"
+            />
+            @if (errors['stock']) {
+              <span class="error-text">{{ errors['stock'] }}</span>
+            }
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-cancel-compact" (click)="cerrarModal()">Cancelar</button>
+        <button type="button" class="btn-teal" (click)="handleSave()">
+          {{ editingId ? 'Actualizar' : 'Guardar' }}
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de ajuste de stock -->
+  @if (stockTarget; as target) {
+    <div class="modal-overlay open" (click)="cerrarStock()">
+      <div class="modal-content" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <h3>Ajustar Stock - {{ target.nombre }}</h3>
+        </div>
+        <div class="modal-body">
+          <p class="stock-current">
+            Stock actual: <strong class="font-mono">{{ target.stock }}</strong>
+          </p>
+          <div class="form-group">
+            <label>Cantidad a sumar (o restar con negativo)</label>
+            <input type="number" [(ngModel)]="stockCantidad" name="stockCantidad" />
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-cancel-compact" (click)="cerrarStock()">Cancelar</button>
+          <button type="button" class="btn-teal" (click)="handleAdjustStock()">Aplicar</button>
+        </div>
+      </div>
+    </div>
+  }
+</div>

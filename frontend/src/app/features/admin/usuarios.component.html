@@ -1,0 +1,195 @@
+<div class="usuarios-page">
+  <!-- Barra de herramientas -->
+  <div class="usuarios-toolbar">
+    <div class="search-wrapper">
+      <span class="material-icons">search</span>
+      <input
+        type="text"
+        placeholder="Buscar usuario por nombre, NIT o email..."
+        [(ngModel)]="searchTerm"
+        (ngModelChange)="onSearchChange()"
+        name="busqueda"
+      />
+    </div>
+    <div class="toolbar-actions">
+      <select class="rol-filter" [(ngModel)]="rolFilter" name="rolFilter">
+        <option value="">Todos los roles</option>
+        @for (perfil of perfiles; track perfil.rol) {
+          <option [value]="perfil.rol">{{ perfil.nombre }}</option>
+        }
+      </select>
+      <button type="button" class="btn-teal" (click)="openCreate()">
+        <span class="material-icons">person_add</span>
+        NUEVO USUARIO
+      </button>
+    </div>
+  </div>
+
+  <!-- Tabla de usuarios -->
+  <div class="content-card">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Usuario</th>
+          <th>NIT</th>
+          <th>Email</th>
+          <th>Rol</th>
+          <th>Estado</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        @if (loading()) {
+          <tr>
+            <td colspan="6" class="empty-table">
+              <span class="material-icons">sync</span>
+              <p>Cargando usuarios...</p>
+            </td>
+          </tr>
+        } @else if (filteredUsuarios.length === 0) {
+          <tr>
+            <td colspan="6" class="empty-table">
+              <span class="material-icons">admin_panel_settings</span>
+              <p>No se encontraron usuarios</p>
+            </td>
+          </tr>
+        } @else {
+          @for (usuario of filteredUsuarios; track usuario.id) {
+            <tr>
+              <td>
+                <div class="user-cell">
+                  <span class="material-icons user-icon">account_circle</span>
+                  {{ usuario.nombre }}
+                </div>
+              </td>
+              <td class="font-mono">{{ usuario.nit }}</td>
+              <td>{{ usuario.email || '--' }}</td>
+              <td>
+                <span class="rol-badge" [class]="usuario.rol">{{ rolLabel(usuario.rol) }}</span>
+              </td>
+              <td>
+                <span class="badge-status" [class.enviada]="usuario.activo" [class.rechazada]="!usuario.activo">
+                  {{ usuario.activo ? 'Activo' : 'Inactivo' }}
+                </span>
+              </td>
+              <td>
+                <div class="product-actions">
+                  <button type="button" class="action-btn" (click)="openEdit(usuario)" title="Editar">
+                    <span class="material-icons">edit</span>
+                  </button>
+                  <button
+                    type="button"
+                    class="action-btn"
+                    (click)="handleToggle(usuario)"
+                    [title]="usuario.activo ? 'Desactivar' : 'Activar'"
+                  >
+                    <span class="material-icons">{{ usuario.activo ? 'toggle_off' : 'toggle_on' }}</span>
+                  </button>
+                  <button type="button" class="action-btn danger" (click)="handleDelete(usuario)" title="Eliminar">
+                    <span class="material-icons">delete</span>
+                  </button>
+                </div>
+              </td>
+            </tr>
+          }
+        }
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Modal de crear/editar usuario -->
+  <div class="modal-overlay" [class.open]="showModal" (click)="closeModal()">
+    <div class="modal-content" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3>{{ editingId ? 'Editar Usuario' : 'Nuevo Usuario' }}</h3>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>NIT *</label>
+          <input
+            type="text"
+            placeholder="Ej: 900.123.456-7"
+            [value]="formData.nit"
+            (input)="handleChange('nit', $any($event.target).value)"
+            [class.input-error]="errors['nit']"
+          />
+          @if (errors['nit']) {
+            <span class="error-text">{{ errors['nit'] }}</span>
+          }
+        </div>
+
+        <div class="form-group">
+          <label>Nombre Completo *</label>
+          <input
+            type="text"
+            placeholder="Nombre del usuario"
+            [value]="formData.nombre"
+            (input)="handleChange('nombre', $any($event.target).value)"
+            [class.input-error]="errors['nombre']"
+          />
+          @if (errors['nombre']) {
+            <span class="error-text">{{ errors['nombre'] }}</span>
+          }
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Email</label>
+            <input
+              type="email"
+              placeholder="correo@empresa.com"
+              [value]="formData.email"
+              (input)="handleChange('email', $any($event.target).value)"
+              [class.input-error]="errors['email']"
+            />
+            @if (errors['email']) {
+              <span class="error-text">{{ errors['email'] }}</span>
+            }
+          </div>
+          <div class="form-group">
+            <label>Telefono</label>
+            <input
+              type="tel"
+              placeholder="+57 300 123 4567"
+              [value]="formData.telefono"
+              (input)="handleChange('telefono', $any($event.target).value)"
+              [class.input-error]="errors['telefono']"
+            />
+            @if (errors['telefono']) {
+              <span class="error-text">{{ errors['telefono'] }}</span>
+            }
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Rol *</label>
+          <select [value]="formData.rol" (change)="handleChange('rol', $any($event.target).value)">
+            @for (perfil of perfiles; track perfil.rol) {
+              <option [value]="perfil.rol" [selected]="formData.rol === perfil.rol">{{ perfil.nombre }}</option>
+            }
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>{{ editingId ? 'Nueva Contrasena (opcional)' : 'Contrasena *' }}</label>
+          <input
+            type="password"
+            [placeholder]="editingId ? 'Dejar vacio para no cambiar' : 'Minimo 4 caracteres'"
+            [value]="formData.password"
+            (input)="handleChange('password', $any($event.target).value)"
+            [class.input-error]="errors['password']"
+          />
+          @if (errors['password']) {
+            <span class="error-text">{{ errors['password'] }}</span>
+          }
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-cancel-compact" (click)="closeModal()">Cancelar</button>
+        <button type="button" class="btn-teal" (click)="handleSave()">
+          {{ editingId ? 'Actualizar' : 'Guardar' }}
+        </button>
+      </div>
+    </div>
+  </div>
+</div>

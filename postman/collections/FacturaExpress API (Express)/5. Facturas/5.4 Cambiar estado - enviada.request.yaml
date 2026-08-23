@@ -1,0 +1,23 @@
+$kind: http-request
+name: 5.4 Cambiar estado -> enviada
+url: "{{baseUrl}}/facturas/{{facturaId}}/estado"
+method: PUT
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{token}}
+body:
+  type: text
+  content: |-
+    {
+      "estado": "enviada"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Estado cambiado a enviada (HTTP 200)', function () {
+          pm.response.to.have.status(200);
+          const json = pm.response.json();
+          pm.expect(json.factura.estado).to.eql('enviada');
+      });
+    language: text/javascript
+order: 4000

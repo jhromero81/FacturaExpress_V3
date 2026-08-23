@@ -1,0 +1,20 @@
+$kind: http-request
+url: "{{baseUrl}}/backup"
+method: POST
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{token}}
+body:
+  type: text
+  content: "{}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Backup creado (HTTP 200)', function () {
+          pm.response.to.have.status(200);
+          const json = pm.response.json();
+          pm.expect(json.success).to.be.true;
+          pm.collectionVariables.set('archivoBackup', json.backup.archivo);
+      });
+    language: text/javascript
+order: 2000

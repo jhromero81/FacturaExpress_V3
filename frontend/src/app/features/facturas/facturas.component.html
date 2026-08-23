@@ -1,0 +1,235 @@
+<div class="facturacion-page">
+  <!-- Barra de herramientas -->
+  <div class="facturacion-toolbar">
+    <div class="search-wrapper">
+      <span class="material-icons">search</span>
+      <input
+        type="text"
+        placeholder="Buscar por numero o cliente..."
+        [value]="searchTerm"
+        (input)="onBuscar($any($event.target).value)"
+      />
+    </div>
+
+    <div class="toolbar-actions">
+      <div class="filter-group">
+        @for (status of filtros; track status) {
+          <button
+            type="button"
+            class="tab-btn"
+            [class.active]="statusFilter === status"
+            (click)="cambiarFiltro(status)"
+          >
+            {{ status === 'todos' ? 'Todos' : label(status) }}
+          </button>
+        }
+      </div>
+
+      <button type="button" class="btn-outline-accent" (click)="exportCSV()">
+        <span class="material-icons">download</span>
+        Exportar Reporte
+      </button>
+
+      <button type="button" class="btn-teal" (click)="irAVentas()">
+        <span class="material-icons">add</span>
+        Nueva Venta
+      </button>
+    </div>
+  </div>
+
+  <!-- Tabla de facturas -->
+  <div class="content-card">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Numero Factura</th>
+          <th>Fecha Emision</th>
+          <th>Cliente</th>
+          <th>Estado DIAN</th>
+          <th>Total</th>
+          <th>Documentos</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        @if (loading) {
+          <tr>
+            <td colspan="7" class="empty-table">
+              <span class="material-icons">sync</span>
+              <p>Cargando facturas...</p>
+            </td>
+          </tr>
+        } @else if (paginatedFacturas.length === 0) {
+          <tr>
+            <td colspan="7" class="empty-table">
+              <span class="material-icons">receipt_long</span>
+              <p>No se encontraron facturas</p>
+            </td>
+          </tr>
+        } @else {
+          @for (factura of paginatedFacturas; track factura.id) {
+            <tr>
+              <td class="font-mono">{{ factura.numero }}</td>
+              <td>{{ date(factura.fecha) }}</td>
+              <td>{{ factura.cliente?.nombre || 'N/A' }}</td>
+              <td>
+                <span class="badge-status {{ factura.estado }}">{{ label(factura.estado) }}</span>
+              </td>
+              <td class="amount-cell font-mono">{{ money(factura.total) }}</td>
+              <td>
+                <div class="doc-actions">
+                  <button type="button" class="doc-btn pdf" (click)="downloadPDF(factura)" title="Descargar PDF">
+                    <span class="material-icons">picture_as_pdf</span>
+                  </button>
+                  <button type="button" class="doc-btn xml" (click)="downloadXML(factura)" title="Descargar XML">
+                    <span class="material-icons">code</span>
+                  </button>
+                </div>
+              </td>
+              <td>
+                <div class="doc-actions">
+                  <button type="button" class="doc-btn view" (click)="openDetail(factura)" title="Ver detalle">
+                    <span class="material-icons">visibility</span>
+                  </button>
+                  <button
+                    type="button"
+                    class="doc-btn change"
+                    (click)="changeEstado(factura, factura.estado === 'pendiente' ? 'enviada' : 'pendiente')"
+                    title="{{ factura.estado === 'pendiente' ? 'Marcar como enviada' : 'Marcar como pendiente' }}"
+                  >
+                    <span class="material-icons">swap_horiz</span>
+                  </button>
+                  @if (factura.estado !== 'enviada') {
+                    <button type="button" class="doc-btn del" (click)="handleDelete(factura)" title="Eliminar factura">
+                      <span class="material-icons">delete</span>
+                    </button>
+                  }
+                </div>
+              </td>
+            </tr>
+          }
+        }
+      </tbody>
+    </table>
+
+    <!-- Paginacion -->
+    @if (totalPages > 1) {
+      <div class="pagination">
+        <button type="button" (click)="goToPage(currentPage - 1)" [disabled]="currentPage === 1">
+          <span class="material-icons">chevron_left</span>
+        </button>
+        <span class="page-info">
+          Pagina {{ currentPage }} de {{ totalPages }}
+        </span>
+        <button type="button" (click)="goToPage(currentPage + 1)" [disabled]="currentPage === totalPages">
+          <span class="material-icons">chevron_right</span>
+        </button>
+      </div>
+    }
+  </div>
+
+  <!-- Modal de detalle de factura -->
+  @if (selected; as sel) {
+    <div class="modal-overlay open" (click)="closeDetail()">
+      <div class="modal-content modal-wide" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <h3>Factura {{ sel.numero }}</h3>
+        </div>
+        <div class="modal-body">
+          @if (detailLoading) {
+            <div class="empty-state">
+              <span class="material-icons">sync</span>
+              <p>Cargando detalle...</p>
+            </div>
+          } @else {
+            <div class="detail-meta">
+              <div>
+                <span class="detail-label">Fecha</span>
+                <span class="font-mono">{{ date(sel.fecha) }}</span>
+              </div>
+              <div>
+                <span class="detail-label">Cliente</span>
+                <span>{{ sel.cliente?.nombre }}</span>
+              </div>
+              <div>
+                <span class="detail-label">Estado</span>
+                <span class="badge-status {{ sel.estado }}">{{ label(sel.estado) }}</span>
+              </div>
+              <div>
+                <span class="detail-label">Firma</span>
+                <span class="badge-status {{ sel.firmaEstado === 'firmada' ? 'enviada' : sel.firmaEstado }}">
+                  {{ sel.firmaEstado }}
+                </span>
+              </div>
+            </div>
+
+            <div class="detail-meta">
+              <div>
+                <span class="detail-label">Intentos DIAN</span>
+                <span class="font-mono">{{ sel.intentosDian }}</span>
+              </div>
+              <div>
+                <span class="detail-label">Correo enviado</span>
+                <span>{{ sel.correoEnviado ? 'Si' : 'No' }}</span>
+              </div>
+              <div>
+                <span class="detail-label">CUNE</span>
+                <span class="font-mono cune-text" [title]="sel.cufe || ''">
+                  {{ sel.cufe ? sel.cufe.slice(0, 24) + '...' : 'Pendiente' }}
+                </span>
+              </div>
+            </div>
+
+            <table class="data-table detail-items">
+              <thead>
+                <tr>
+                  <th>Producto</th>
+                  <th>Cant.</th>
+                  <th>Precio</th>
+                  <th>Subtotal</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (item of sel.items ?? []; track $index) {
+                  <tr>
+                    <td>{{ item.nombre }}</td>
+                    <td class="font-mono">{{ item.cantidad }}</td>
+                    <td class="amount-cell font-mono">{{ money(item.precioUnitario) }}</td>
+                    <td class="amount-cell font-mono">{{ money(item.subtotal) }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+
+            <div class="detail-totals">
+              <div><span>Subtotal</span><span class="font-mono">{{ money(sel.subtotal) }}</span></div>
+              @if (sel.descuento > 0) {
+                <div class="detail-discount">
+                  <span>Descuento</span><span class="font-mono">-{{ money(sel.descuento) }}</span>
+                </div>
+              }
+              <div><span>IVA (19%)</span><span class="font-mono">{{ money(sel.iva) }}</span></div>
+              <div class="detail-total"><span>TOTAL</span><span class="font-mono">{{ money(sel.total) }}</span></div>
+            </div>
+          }
+        </div>
+        <div class="modal-footer">
+          <button
+            type="button"
+            class="btn-outline-accent btn-sm"
+            (click)="changeEstado(sel, sel.estado === 'pendiente' ? 'enviada' : 'pendiente')"
+            title="Cambiar estado DIAN"
+          >
+            <span class="material-icons">swap_horiz</span>
+            {{ sel.estado === 'pendiente' ? 'Marcar Enviada' : 'Marcar Pendiente' }}
+          </button>
+          <button type="button" class="btn-outline-accent btn-sm" (click)="downloadPDF(sel)" title="Descargar PDF">
+            <span class="material-icons">picture_as_pdf</span>
+            PDF
+          </button>
+          <button type="button" class="btn-cancel-compact" (click)="closeDetail()">Cerrar</button>
+        </div>
+      </div>
+    </div>
+  }
+</div>

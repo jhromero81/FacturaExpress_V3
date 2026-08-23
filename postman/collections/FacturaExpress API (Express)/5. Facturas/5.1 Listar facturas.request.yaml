@@ -1,0 +1,16 @@
+$kind: http-request
+url: "{{baseUrl}}/facturas?limite=20"
+method: GET
+headers:
+  Authorization: Bearer {{token}}
+queryParams:
+  limite: "20"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Listado de facturas (HTTP 200)', function () {
+          pm.response.to.have.status(200);
+          pm.expect(pm.response.json().facturas).to.be.an('array');
+      });
+    language: text/javascript
+order: 1000

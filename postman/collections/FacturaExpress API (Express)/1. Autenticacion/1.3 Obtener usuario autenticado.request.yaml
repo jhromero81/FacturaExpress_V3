@@ -1,0 +1,15 @@
+$kind: http-request
+url: "{{baseUrl}}/auth/me"
+method: GET
+headers:
+  Authorization: Bearer {{token}}
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Devuelve el usuario de la sesion (HTTP 200)', function () {
+          pm.response.to.have.status(200);
+          const json = pm.response.json();
+          pm.expect(json.usuario.nit).to.eql('900.123.456-7');
+      });
+    language: text/javascript
+order: 3000

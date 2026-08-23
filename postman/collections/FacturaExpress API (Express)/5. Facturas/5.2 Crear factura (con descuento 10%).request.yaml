@@ -1,0 +1,32 @@
+$kind: http-request
+url: "{{baseUrl}}/facturas"
+method: POST
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{token}}
+body:
+  type: text
+  content: |-
+    {
+      "clienteId": 1,
+      "items": [
+        { "productoId": 1, "cantidad": 2 }
+      ],
+      "descuento": 10
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Factura creada (HTTP 201)', function () {
+          pm.response.to.have.status(201);
+      });
+
+      const json = pm.response.json();
+      pm.test('CUNE generado y descuento aplicado', function () {
+          pm.expect(json.factura.cufe.length).to.be.at.least(40);
+          pm.expect(json.factura.descuento).to.be.above(0);
+      });
+
+      pm.collectionVariables.set('facturaId', json.factura.id);
+    language: text/javascript
+order: 2000

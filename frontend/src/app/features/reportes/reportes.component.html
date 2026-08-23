@@ -1,0 +1,289 @@
+<div class="reportes-page">
+  <!-- Indicador de carga -->
+  @if (loading()) {
+    <div class="empty-state">
+      <span class="material-icons">sync</span>
+      <p>Cargando reportes...</p>
+    </div>
+  }
+
+  <!-- KPIs del reporte -->
+  <div class="report-kpi-grid">
+    <div class="report-kpi">
+      <span class="material-icons report-kpi-icon">attach_money</span>
+      <div class="report-kpi-info">
+        <div class="report-kpi-value font-mono">{{ money(kpis()?.ventasMes || 0) }}</div>
+        <div class="report-kpi-label">Ventas del Mes</div>
+      </div>
+    </div>
+    <div class="report-kpi">
+      <span class="material-icons report-kpi-icon">receipt_long</span>
+      <div class="report-kpi-info">
+        <div class="report-kpi-value font-mono">{{ kpis()?.facturasEmitidas || 0 }}</div>
+        <div class="report-kpi-label">Facturas Emitidas</div>
+      </div>
+    </div>
+    <div class="report-kpi">
+      <span class="material-icons report-kpi-icon">person_add</span>
+      <div class="report-kpi-info">
+        <div class="report-kpi-value font-mono">{{ kpis()?.clientesNuevos || 0 }}</div>
+        <div class="report-kpi-label">Clientes Nuevos</div>
+      </div>
+    </div>
+    <div class="report-kpi">
+      <span class="material-icons report-kpi-icon">inventory_2</span>
+      <div class="report-kpi-info">
+        <div class="report-kpi-value font-mono">{{ kpis()?.productosVendidos || 0 }}</div>
+        <div class="report-kpi-label">Productos Vendidos</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Barra de herramientas -->
+  <div class="reportes-toolbar">
+    <div class="filter-group">
+      @for (p of periodos; track p.key) {
+        <button type="button" class="tab-btn" [class.active]="periodo === p.key" (click)="setPeriodo(p.key)">
+          {{ p.label }}
+        </button>
+      }
+    </div>
+
+    <button type="button" class="btn-outline-accent" (click)="exportReport()" [disabled]="exporting()">
+      <span class="material-icons">picture_as_pdf</span>
+      {{ exporting() ? 'Generando...' : 'Exportar PDF' }}
+    </button>
+
+    <button type="button" class="btn-outline-accent" (click)="showHistorial.set(true)">
+      <span class="material-icons">history</span>
+      Historial
+    </button>
+  </div>
+
+  <!-- Contenido principal: grafico + productos -->
+  <div class="reportes-content">
+    <!-- Grafico de barras comparativo -->
+    <div class="content-card">
+      <h3 class="card-title">Comparativa de Ventas</h3>
+      <div class="chart-container" #chartRef>
+        <svg viewBox="0 0 600 280" class="bar-chart" (mouseleave)="cerrarTooltip()">
+          <!-- Lineas de referencia -->
+          @for (i of [0, 1, 2, 3, 4]; track i) {
+            <line x1="50" [attr.y1]="30 + i * 55" x2="570" [attr.y2]="30 + i * 55" stroke="var(--border)" stroke-width="1" />
+          }
+
+          <!-- Barras agrupadas -->
+          @for (d of chartData; track d.key; let i = $index) {
+            @if (maxChartValue >= 0) {
+              <g
+                class="chart-bar-group"
+                (mouseenter)="handleBarHover($event, d)"
+                (mousemove)="handleBarHover($event, d)"
+                (click)="abrirDetalle(d)"
+              >
+                @if (maxChartValue > 0 && d.anterior > 0) {
+                  <rect
+                    class="bar-rect bar-anterior"
+                    [style.animation-delay.ms]="i * 80"
+                    [attr.x]="80 + i * 100"
+                    [attr.y]="230 - (d.anterior / maxChartValue) * 180"
+                    width="30"
+                    [attr.height]="(d.anterior / maxChartValue) * 180"
+                    rx="4"
+                    fill="#b0bec5"
+                  />
+                }
+                @if (maxChartValue > 0 && d.actual > 0) {
+                  <rect
+                    class="bar-rect bar-actual"
+                    [style.animation-delay.ms]="i * 80 + 60"
+                    [attr.x]="80 + i * 100 + 34"
+                    [attr.y]="230 - (d.actual / maxChartValue) * 180"
+                    width="30"
+                    [attr.height]="(d.actual / maxChartValue) * 180"
+                    rx="4"
+                    fill="var(--accent)"
+                  />
+                }
+
+                <!-- Valor de la barra anterior -->
+                @if (d.anterior > 0) {
+                  <text
+                    [attr.x]="80 + i * 100 + 15"
+                    [attr.y]="230 - (maxChartValue > 0 ? (d.anterior / maxChartValue) * 180 : 0) - 6"
+                    text-anchor="middle"
+                    class="chart-value-label"
+                  >
+                    {{ shortMoney(d.anterior) }}
+                  </text>
+                }
+
+                <!-- Valor de la barra actual -->
+                @if (d.actual > 0) {
+                  <text
+                    [attr.x]="80 + i * 100 + 49"
+                    [attr.y]="230 - (maxChartValue > 0 ? (d.actual / maxChartValue) * 180 : 0) - 6"
+                    text-anchor="middle"
+                    class="chart-value-label"
+                  >
+                    {{ shortMoney(d.actual) }}
+                  </text>
+                }
+
+                <!-- Etiqueta del periodo -->
+                <text [attr.x]="80 + i * 100 + 32" y="255" text-anchor="middle" class="chart-day-label">
+                  {{ d.mes }}
+                </text>
+              </g>
+            }
+          }
+        </svg>
+
+        <!-- Tooltip al pasar el mouse sobre una barra -->
+        @if (tooltip(); as t) {
+          <div class="chart-tooltip" [style.left.px]="t.x" [style.top.px]="t.y">
+            <div class="chart-tooltip-title">{{ t.dato.mes }}</div>
+            <div class="chart-tooltip-row">
+              <span class="legend-dot" style="background-color: var(--accent)"></span>
+              <span>Actual: <strong>{{ money(t.dato.actual) }}</strong> · {{ t.dato.facturas }} factura(s)</span>
+            </div>
+            <div class="chart-tooltip-row">
+              <span class="legend-dot" style="background-color: #b0bec5"></span>
+              <span>Anterior: <strong>{{ money(t.dato.anterior) }}</strong> · {{ t.dato.anteriorFacturas }} factura(s)</span>
+            </div>
+            <div class="chart-tooltip-hint">Clic para ver detalle</div>
+          </div>
+        }
+      </div>
+
+      <!-- Leyenda -->
+      <div class="chart-legend">
+        <div class="legend-item">
+          <span class="legend-dot" style="background-color: #b0bec5"></span>
+          <span>Periodo Anterior</span>
+        </div>
+        <div class="legend-item">
+          <span class="legend-dot" style="background-color: var(--accent)"></span>
+          <span>Periodo Actual</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sidebar: productos top + meta de ventas -->
+    <div class="reportes-sidebar">
+      <!-- Productos mas vendidos -->
+      <div class="content-card">
+        <h3 class="card-title">Productos Mas Vendidos</h3>
+        <div class="top-products">
+          @for (p of topProducts(); track p.id; let i = $index) {
+            <div class="top-product-item">
+              <span class="product-rank">#{{ i + 1 }}</span>
+              <div class="product-details">
+                <span class="product-name">{{ p.nombre }}</span>
+                <span class="product-sold font-mono">{{ p.vendidos }} vendidos</span>
+              </div>
+            </div>
+          }
+        </div>
+      </div>
+
+      <!-- Meta de ventas mensual -->
+      <div class="content-card">
+        <h3 class="card-title">Meta de Ventas</h3>
+        <div class="sales-goal">
+          <div class="goal-progress-text">
+            <span class="font-mono goal-percent">{{ goalProgress }}%</span>
+            <span class="goal-target">Meta: {{ money(metaVentas) }}</span>
+          </div>
+          <div class="progress-bar">
+            <div class="determinate" [style.width.%]="goalProgress"></div>
+          </div>
+          <p class="goal-remaining font-mono">Faltan {{ money(metaRestante) }}</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de detalle de un periodo del grafico -->
+  @if (detailBar(); as bar) {
+    <div class="modal-overlay open" (click)="cerrarDetalle()">
+      <div class="modal-content" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <h3>Detalle: Periodo {{ bar.mes }}</h3>
+        </div>
+        <div class="modal-body">
+          <div class="report-detail-row">
+            <div class="report-detail-block">
+              <span class="legend-dot" style="background-color: var(--accent); margin-top: 6px"></span>
+              <div>
+                <div class="report-detail-label">Periodo Actual</div>
+                <div class="report-detail-value font-mono">{{ money(bar.actual) }}</div>
+                <div class="report-detail-sub font-mono">{{ bar.facturas }} factura(s)</div>
+              </div>
+            </div>
+            <div class="report-detail-block">
+              <span class="legend-dot" style="background-color: #b0bec5; margin-top: 6px"></span>
+              <div>
+                <div class="report-detail-label">Periodo Anterior</div>
+                <div class="report-detail-value font-mono">{{ money(bar.anterior) }}</div>
+                <div class="report-detail-sub font-mono">{{ bar.anteriorFacturas }} factura(s)</div>
+              </div>
+            </div>
+          </div>
+          <p class="report-detail-variation">
+            Variacion:
+            <strong>
+              {{ bar.anterior > 0 ? (((bar.actual - bar.anterior) / bar.anterior) * 100).toFixed(1) + '%' : '--' }}
+            </strong>
+          </p>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-cancel-compact" (click)="cerrarDetalle()">Cerrar</button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- Modal de historial de reportes -->
+  @if (showHistorial()) {
+    <div class="modal-overlay open" (click)="showHistorial.set(false)">
+      <div class="modal-content" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <h3>Historial de Reportes</h3>
+        </div>
+        <div class="modal-body">
+          @if (historial().length === 0) {
+            <div class="empty-state">
+              <span class="material-icons">history</span>
+              <p>Aun no se han generado reportes</p>
+            </div>
+          } @else {
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Archivo</th>
+                  <th>Periodo</th>
+                  <th>Tamano</th>
+                  <th>Fecha</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (r of historial(); track r.id) {
+                  <tr>
+                    <td class="font-mono">{{ r.archivo }}</td>
+                    <td>{{ r.periodo }}</td>
+                    <td class="font-mono">{{ Math.round(r.tamano / 1024) }} KB</td>
+                    <td>{{ date(r.createdAt) }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          }
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-cancel-compact" (click)="showHistorial.set(false)">Cerrar</button>
+        </div>
+      </div>
+    </div>
+  }
+</div>

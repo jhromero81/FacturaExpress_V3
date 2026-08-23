@@ -1,0 +1,14 @@
+$kind: http-request
+url: "{{baseUrl}}/backup/{{archivoBackup}}"
+method: DELETE
+headers:
+  Authorization: Bearer {{token}}
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Backup eliminado (HTTP 200)', function () {
+          pm.response.to.have.status(200);
+          pm.expect(pm.response.json().success).to.be.true;
+      });
+    language: text/javascript
+order: 5000

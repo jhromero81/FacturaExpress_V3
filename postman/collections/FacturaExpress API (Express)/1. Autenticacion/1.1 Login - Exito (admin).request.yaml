@@ -1,0 +1,28 @@
+$kind: http-request
+url: "{{baseUrl}}/auth/login"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "nit": "900.123.456-7",
+      "password": "admin123"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Login exitoso (HTTP 200)', function () {
+          pm.response.to.have.status(200);
+      });
+
+      const json = pm.response.json();
+      pm.test('Devuelve token JWT y usuario admin', function () {
+          pm.expect(json.token).to.be.a('string');
+          pm.expect(json.usuario.rol).to.eql('admin');
+      });
+
+      pm.collectionVariables.set('token', json.token);
+    language: text/javascript
+order: 1000

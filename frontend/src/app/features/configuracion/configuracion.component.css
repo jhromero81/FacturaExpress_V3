@@ -1,0 +1,386 @@
+/**
+ * features/configuracion/configuracion.component.css
+ * Estilos de la configuracion: nav lateral por secciones, tarjetas,
+ * switches tipo Materialize, grid de roles y panel de seguridad
+ * (reemplaza Configuracion.css de React).
+ */
+
+/* ============================
+   LAYOUT DE CONFIGURACION
+   ============================ */
+.configuracion-page {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 24px;
+  align-items: start;
+}
+
+/* ============================
+   NAVEGACION POR SECCIONES
+   ============================ */
+.config-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: var(--card-bg);
+  border-radius: 12px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  position: sticky;
+  top: calc(var(--topbar-h) + 24px);
+  transition: background-color var(--transition), border-color var(--transition);
+}
+
+.config-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 500;
+  font-family: var(--font-body);
+  color: var(--text-muted);
+  text-align: left;
+  transition: all var(--transition);
+}
+
+.config-nav-item:hover {
+  background-color: rgba(26, 188, 156, 0.05);
+  color: var(--text-dark);
+}
+
+.config-nav-item.active {
+  background-color: rgba(26, 188, 156, 0.1);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.config-nav-item .material-icons {
+  font-size: 20px;
+}
+
+/* ============================
+   CONTENIDO DE SECCIONES
+   ============================ */
+.config-section-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 28px;
+  transition: border-color var(--transition), background-color var(--transition);
+}
+
+.config-section-card:hover {
+  border-color: var(--accent);
+}
+
+.config-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text-dark);
+  margin-bottom: 24px;
+}
+
+.config-title .material-icons {
+  color: var(--accent);
+}
+
+.config-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.config-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.config-actions .btn-teal,
+.config-actions .btn-outline-accent {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 20px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.config-actions .btn-teal {
+  background-color: var(--accent);
+  color: #fff;
+  border: none;
+}
+
+.config-actions .btn-teal:hover:not(:disabled) {
+  background-color: var(--accent-dk);
+}
+
+.config-actions .btn-teal:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.config-actions .btn-outline-accent {
+  background: transparent;
+  color: var(--accent);
+  border: 1.5px solid var(--accent);
+}
+
+.config-actions .btn-outline-accent:hover {
+  background-color: rgba(26, 188, 156, 0.08);
+}
+
+.config-actions .material-icons {
+  font-size: 18px;
+}
+
+/* ============================
+   FILA DE BADGE (Expiracion)
+   ============================ */
+.config-badge-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.config-badge-row input {
+  flex: 1;
+}
+
+.expiry-badge {
+  background-color: rgba(231, 76, 60, 0.1);
+  color: var(--danger);
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* ============================
+   TOGGLES (Interruptores)
+   ============================ */
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.toggle-row:last-of-type {
+  border-bottom: none;
+}
+
+.toggle-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.toggle-label {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--text-dark);
+}
+
+.toggle-desc {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+/* Switch toggle estilo Materialize */
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 48px;
+  height: 26px;
+  flex-shrink: 0;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.switch .lever {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #ccc;
+  transition: var(--transition);
+  border-radius: 26px;
+}
+
+.switch .lever::before {
+  content: '';
+  position: absolute;
+  height: 20px;
+  width: 20px;
+  left: 3px;
+  bottom: 3px;
+  background-color: #fff;
+  transition: var(--transition);
+  border-radius: 50%;
+}
+
+.switch input:checked + .lever {
+  background-color: var(--accent);
+}
+
+.switch input:checked + .lever::before {
+  transform: translateX(22px);
+}
+
+/* ============================
+   GRID DE ROLES
+   ============================ */
+.roles-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+.role-card {
+  background: var(--bg-main);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+  text-align: center;
+  transition: all var(--transition);
+}
+
+.role-card:hover {
+  border-color: var(--accent);
+  transform: translateY(-2px);
+}
+
+.role-icon {
+  font-size: 36px !important;
+  color: var(--accent);
+  margin-bottom: 12px;
+  display: block;
+}
+
+.role-card h4 {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-dark);
+  margin-bottom: 4px;
+}
+
+.role-card p {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-bottom: 16px;
+}
+
+/* ============================
+   INFO DE SEGURIDAD
+   ============================ */
+.security-info-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.security-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px;
+  background: var(--bg-main);
+  border-radius: 10px;
+  border: 1px solid var(--border);
+}
+
+.security-item > .material-icons {
+  font-size: 24px;
+  color: var(--accent);
+}
+
+.security-label {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.security-value {
+  display: block;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-dark);
+}
+
+/* ============================
+   OPCIONES DE TAMANO DE TEXTO
+   ============================ */
+.size-options {
+  display: flex;
+  gap: 8px;
+}
+
+.size-badge {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: 1.5px solid var(--border);
+  background: transparent;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 0.85rem;
+  font-family: var(--font-body);
+  color: var(--text-muted);
+  transition: all var(--transition);
+}
+
+.size-badge:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.size-badge.active {
+  background-color: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+/* ============================
+   RESPONSIVE
+   ============================ */
+@media (max-width: 1024px) {
+  .configuracion-page {
+    grid-template-columns: 1fr;
+  }
+
+  .config-nav {
+    flex-direction: row;
+    overflow-x: auto;
+    position: static;
+  }
+
+  .config-nav-item {
+    white-space: nowrap;
+  }
+
+  .roles-grid {
+    grid-template-columns: 1fr;
+  }
+}

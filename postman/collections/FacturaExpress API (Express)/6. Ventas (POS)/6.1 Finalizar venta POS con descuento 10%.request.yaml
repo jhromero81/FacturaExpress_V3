@@ -1,0 +1,29 @@
+$kind: http-request
+url: "{{baseUrl}}/facturas"
+method: POST
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{token}}
+body:
+  type: text
+  content: |-
+    {
+      "clienteId": 1,
+      "items": [
+        { "productoId": 1, "cantidad": 3 }
+      ],
+      "descuento": 10
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Venta finalizada (HTTP 201)', function () {
+          pm.response.to.have.status(201);
+      });
+
+      const json = pm.response.json();
+      pm.test('Descuento porcentual aplicado', function () {
+          pm.expect(json.factura.descuento).to.be.above(0);
+      });
+    language: text/javascript
+order: 1000

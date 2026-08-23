@@ -1,0 +1,308 @@
+<div class="configuracion-page">
+  <!-- Navegacion por secciones -->
+  <div class="config-nav">
+    @for (s of sections; track s.key) {
+      <button
+        type="button"
+        class="config-nav-item"
+        [class.active]="activeSection() === s.key"
+        (click)="setActive(s.key)"
+      >
+        <span class="material-icons">{{ s.icon }}</span>
+        <span>{{ s.label }}</span>
+      </button>
+    }
+  </div>
+
+  <!-- Contenido de la seccion activa -->
+  <div class="config-content">
+    <!-- SECCION: DATOS DE LA EMPRESA -->
+    @if (activeSection() === 'empresa') {
+      <div class="config-section-card">
+        <h3 class="config-title">
+          <span class="material-icons">business</span>
+          Datos de la Empresa
+        </h3>
+        <div class="config-form">
+          <div class="form-group">
+            <label>NIT</label>
+            <input type="text" [(ngModel)]="empresa.nit" name="nit" />
+          </div>
+          <div class="form-group">
+            <label>Razon Social</label>
+            <input type="text" [(ngModel)]="empresa.razonSocial" name="razonSocial" />
+          </div>
+          <div class="form-group">
+            <label>Email de Facturacion</label>
+            <input type="email" [(ngModel)]="empresa.emailFacturacion" name="emailFacturacion" />
+          </div>
+          <div class="form-group">
+            <label>Telefono</label>
+            <input type="tel" [(ngModel)]="empresa.telefono" name="telefono" />
+          </div>
+          <div class="config-actions">
+            <button type="button" class="btn-teal" (click)="saveEmpresa()">Guardar Cambios</button>
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- SECCION: CONFIGURACION FISCAL -->
+    @if (activeSection() === 'fiscal') {
+      <div class="config-section-card">
+        <h3 class="config-title">
+          <span class="material-icons">verified</span>
+          Configuracion Fiscal (DIAN)
+        </h3>
+        <div class="config-form">
+          <div class="form-group">
+            <label>Numero de Resolucion DIAN</label>
+            <input type="text" [value]="fiscal.resolucionDIAN" readonly />
+          </div>
+          <div class="form-group">
+            <label>Fecha Expiracion Certificado</label>
+            <div class="config-badge-row">
+              <input type="text" [value]="fiscal.fechaExpiracionCert" readonly />
+              <span class="expiry-badge">Vigente hasta {{ fiscal.fechaExpiracionCert }}</span>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Ultima Sincronizacion</label>
+            <input
+              type="text"
+              [value]="fiscal.ultimaSync ? (fiscal.ultimaSync | date: 'dd/MM/yyyy, h:mm:ss a') : '--'"
+              readonly
+            />
+          </div>
+          <div class="config-actions">
+            <button type="button" class="btn-teal" (click)="syncDIAN()" [disabled]="syncing()">
+              {{ syncing() ? 'Sincronizando...' : 'Sincronizar con DIAN' }}
+            </button>
+            <button
+              type="button"
+              class="btn-outline-accent"
+              (click)="toast.mostrar('Subida de certificado en desarrollo', 'info')"
+            >
+              Subir Certificado
+            </button>
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- SECCION: PERFILES DE USUARIO -->
+    @if (activeSection() === 'usuarios') {
+      <div class="config-section-card">
+        <h3 class="config-title">
+          <span class="material-icons">admin_panel_settings</span>
+          Perfiles de Usuario
+        </h3>
+        <div class="roles-grid">
+          <div class="role-card">
+            <span class="material-icons role-icon">admin_panel_settings</span>
+            <h4>Administradores</h4>
+            <p>Acceso total al sistema</p>
+            <button type="button" class="btn-flat" (click)="irA('/usuarios')">Gestionar</button>
+          </div>
+          <div class="role-card">
+            <span class="material-icons role-icon">point_of_sale</span>
+            <h4>Vendedores</h4>
+            <p>Gestion de ventas y clientes</p>
+            <button type="button" class="btn-flat" (click)="irA('/usuarios')">Gestionar</button>
+          </div>
+          <div class="role-card">
+            <span class="material-icons role-icon">analytics</span>
+            <h4>Contadores / Reportes</h4>
+            <p>Solo lectura y reportes</p>
+            <button type="button" class="btn-flat" (click)="irA('/usuarios')">Gestionar</button>
+          </div>
+        </div>
+        <div class="config-actions" style="margin-top: 20px">
+          <button type="button" class="btn-outline-accent" (click)="irA('/usuarios')">
+            <span class="material-icons">person_add</span>
+            Gestionar Usuarios
+          </button>
+          <button type="button" class="btn-outline-accent" (click)="irA('/auditoria')">
+            <span class="material-icons">history</span>
+            Ver Actividad Reciente
+          </button>
+        </div>
+      </div>
+    }
+
+    <!-- SECCION: NOTIFICACIONES -->
+    @if (activeSection() === 'notificaciones') {
+      <div class="config-section-card">
+        <h3 class="config-title">
+          <span class="material-icons">notifications</span>
+          Notificaciones
+        </h3>
+        <div class="config-form">
+          <div class="toggle-row">
+            <div class="toggle-info">
+              <span class="toggle-label">Notificaciones por Email</span>
+              <span class="toggle-desc">Recibir alertas de facturacion por correo</span>
+            </div>
+            <label class="switch">
+              <input type="checkbox" [(ngModel)]="notificaciones.email" name="notifEmail" />
+              <span class="lever"></span>
+            </label>
+          </div>
+
+          <div class="toggle-row">
+            <div class="toggle-info">
+              <span class="toggle-label">Notificaciones Push</span>
+              <span class="toggle-desc">Alertas en tiempo real en el navegador</span>
+            </div>
+            <label class="switch">
+              <input type="checkbox" [(ngModel)]="notificaciones.push" name="notifPush" />
+              <span class="lever"></span>
+            </label>
+          </div>
+
+          <div class="toggle-row">
+            <div class="toggle-info">
+              <span class="toggle-label">Alertas de Facturacion DIAN</span>
+              <span class="toggle-desc">Notificaciones sobre estado de facturas ante la DIAN</span>
+            </div>
+            <label class="switch">
+              <input type="checkbox" [(ngModel)]="notificaciones.dianAlerts" name="notifDian" />
+              <span class="lever"></span>
+            </label>
+          </div>
+
+          <div class="toggle-row">
+            <div class="toggle-info">
+              <span class="toggle-label">Recordatorios Automaticos</span>
+              <span class="toggle-desc">Recordar pendientes de facturacion</span>
+            </div>
+            <label class="switch">
+              <input type="checkbox" [(ngModel)]="notificaciones.recordatorios" name="notifRecordatorios" />
+              <span class="lever"></span>
+            </label>
+          </div>
+
+          <div class="config-actions">
+            <button type="button" class="btn-teal" (click)="guardarNotificaciones()">
+              Guardar Preferencias
+            </button>
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- SECCION: SEGURIDAD -->
+    @if (activeSection() === 'seguridad') {
+      <div class="config-section-card">
+        <h3 class="config-title">
+          <span class="material-icons">shield</span>
+          Seguridad
+        </h3>
+        <div class="config-form">
+          <div class="security-info-grid">
+            <div class="security-item">
+              <span class="material-icons">lock</span>
+              <div>
+                <span class="security-label">Ultimo cambio de contrasena</span>
+                <span class="security-value font-mono">{{ seguridad.ultimoCambioPass }}</span>
+              </div>
+            </div>
+            <div class="security-item">
+              <span class="material-icons">devices</span>
+              <div>
+                <span class="security-label">Dispositivos conectados</span>
+                <span class="security-value font-mono">{{ seguridad.dispositivosConectados }}</span>
+              </div>
+            </div>
+            <div class="security-item">
+              <span class="material-icons">wifi</span>
+              <div>
+                <span class="security-label">Ultima IP de acceso</span>
+                <span class="security-value font-mono">{{ seguridad.ultimaIP }}</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="config-actions">
+            <button
+              type="button"
+              class="btn-outline-accent"
+              (click)="toast.mostrar('Cambio de contrasena en desarrollo', 'info')"
+            >
+              <span class="material-icons">lock_reset</span>
+              Cambiar Contrasena
+            </button>
+            <button
+              type="button"
+              class="btn-outline-accent"
+              (click)="toast.mostrar('Autenticacion 2FA en desarrollo', 'info')"
+            >
+              <span class="material-icons">security</span>
+              Autenticacion 2FA
+            </button>
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- SECCION: ACCESIBILIDAD -->
+    @if (activeSection() === 'accesibilidad') {
+      <div class="config-section-card">
+        <h3 class="config-title">
+          <span class="material-icons">accessibility_new</span>
+          Accesibilidad
+        </h3>
+        <div class="config-form">
+          <div class="toggle-row">
+            <div class="toggle-info">
+              <span class="toggle-label">Alto Contraste</span>
+              <span class="toggle-desc">Colores de alto contraste para mejor visibilidad</span>
+            </div>
+            <label class="switch">
+              <input
+                type="checkbox"
+                [checked]="auth.preferencias().altoContraste"
+                (change)="auth.alternarAltoContraste()"
+              />
+              <span class="lever"></span>
+            </label>
+          </div>
+
+          <div class="toggle-row">
+            <div class="toggle-info">
+              <span class="toggle-label">Modo Oscuro</span>
+              <span class="toggle-desc">Tema oscuro para reducir fatiga visual</span>
+            </div>
+            <label class="switch">
+              <input
+                type="checkbox"
+                [checked]="auth.preferencias().modoOscuro"
+                (change)="auth.alternarModoOscuro()"
+              />
+              <span class="lever"></span>
+            </label>
+          </div>
+
+          <div class="toggle-row">
+            <div class="toggle-info">
+              <span class="toggle-label">Tamano del Texto</span>
+              <span class="toggle-desc">Ajustar el tamano de fuente general</span>
+            </div>
+            <div class="size-options">
+              @for (size of tamanosTexto; track size.key) {
+                <button
+                  type="button"
+                  class="size-badge"
+                  [class.active]="auth.preferencias().tamanoTexto === size.key"
+                  (click)="auth.establecerTamanoTexto(size.key)"
+                >
+                  {{ size.label }}
+                </button>
+              }
+            </div>
+          </div>
+        </div>
+      </div>
+    }
+  </div>
+</div>

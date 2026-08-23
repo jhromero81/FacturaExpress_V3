@@ -1,0 +1,16 @@
+$kind: http-request
+url: "{{baseUrl}}/reportes/productos-top?limite=5"
+method: GET
+headers:
+  Authorization: Bearer {{token}}
+queryParams:
+  limite: "5"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Productos top (HTTP 200)', function () {
+          pm.response.to.have.status(200);
+          pm.expect(pm.response.json().productos).to.be.an('array');
+      });
+    language: text/javascript
+order: 2000

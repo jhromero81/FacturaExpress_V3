@@ -1,0 +1,26 @@
+$kind: http-request
+url: "{{baseUrl}}/productos"
+method: POST
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{token}}
+body:
+  type: text
+  content: |-
+    {
+      "codigo": "PRD-POSTMAN-01",
+      "nombre": "Producto Test Postman",
+      "precio": 25000,
+      "stock": 100
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Producto creado (HTTP 201)', function () {
+          pm.response.to.have.status(201);
+      });
+
+      const json = pm.response.json();
+      pm.collectionVariables.set('productoId', json.producto.id);
+    language: text/javascript
+order: 2000

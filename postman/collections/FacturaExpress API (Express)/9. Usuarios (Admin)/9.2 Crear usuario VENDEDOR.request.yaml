@@ -1,0 +1,31 @@
+$kind: http-request
+url: "{{baseUrl}}/usuarios"
+method: POST
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{token}}
+body:
+  type: text
+  content: |-
+    {
+      "nit": "903.777.888-9",
+      "nombre": "Vendedor Test Postman",
+      "email": "vendedor_test_postman@correo.com",
+      "rol": "vendedor",
+      "password": "Password123"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Usuario creado (HTTP 201)', function () {
+          pm.response.to.have.status(201);
+      });
+
+      const json = pm.response.json();
+      pm.test('Rol asignado correctamente', function () {
+          pm.expect(json.usuario.rol).to.eql('vendedor');
+      });
+
+      pm.collectionVariables.set('usuarioId', json.usuario.id);
+    language: text/javascript
+order: 2000

@@ -1,0 +1,14 @@
+$kind: http-request
+url: "{{baseUrl}}/facturas/{{facturaId}}/pdf"
+method: GET
+headers:
+  Authorization: Bearer {{token}}
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('PDF de factura descargado', function () {
+          pm.response.to.have.status(200);
+          pm.expect(pm.response.headers.get('Content-Type')).to.include('pdf');
+      });
+    language: text/javascript
+order: 5000

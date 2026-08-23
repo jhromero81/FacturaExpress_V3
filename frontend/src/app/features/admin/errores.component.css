@@ -1,0 +1,101 @@
+/**
+ * features/admin/errores.component.css
+ * Estilos del modulo de errores del sistema (reemplaza Errores.css).
+ */
+
+.errores-kpis {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+  margin-bottom: 24px;
+}
+
+.kpi-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  transition: box-shadow var(--transition), background-color var(--transition);
+}
+
+.kpi-card:hover {
+  box-shadow: var(--shadow-md);
+}
+
+.kpi-card > .material-icons {
+  font-size: 34px !important;
+}
+
+.kpi-card.total .material-icons { color: var(--warning); }
+.kpi-card.open .material-icons { color: var(--danger); }
+.kpi-card.resolved .material-icons { color: var(--success); }
+
+.kpi-card > div {
+  display: flex;
+  flex-direction: column;
+}
+
+.kpi-label {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.kpi-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-dark);
+}
+
+.errores-toolbar {
+  margin-bottom: 20px;
+}
+
+.filter-group {
+  display: flex;
+  gap: 10px;
+}
+
+.tipo-badge {
+  display: inline-block;
+  padding: 3px 12px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background-color: rgba(52, 152, 219, 0.12);
+  color: var(--info);
+}
+
+.tipo-badge.dian {
+  background-color: rgba(231, 76, 60, 0.12);
+  color: var(--danger);
+}
+
+.tipo-badge.correo {
+  background-color: rgba(243, 156, 18, 0.12);
+  color: var(--warning);
+}
+
+.tipo-badge.bd {
+  background-color: rgba(155, 89, 182, 0.12);
+  color: #8e44ad;
+}
+
+.error-msg {
+  max-width: 420px;
+  font-size: 0.85rem;
+}
+
+@media (max-width: 768px) {
+  .errores-kpis {
+    grid-template-columns: 1fr;
+  }
+
+  .filter-group {
+    flex-wrap: wrap;
+  }
+}

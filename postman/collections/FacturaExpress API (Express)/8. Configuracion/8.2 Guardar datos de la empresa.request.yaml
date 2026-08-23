@@ -1,0 +1,24 @@
+$kind: http-request
+url: "{{baseUrl}}/configuracion/empresa"
+method: PUT
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{token}}
+body:
+  type: text
+  content: |-
+    {
+      "nit": "900.123.456-7",
+      "razonSocial": "FacturaExpress SAS",
+      "emailFacturacion": "facturacion@facturaexpress.co",
+      "telefono": "6012345678"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Datos de empresa guardados (HTTP 200)', function () {
+          pm.response.to.have.status(200);
+          pm.expect(pm.response.json().success).to.be.true;
+      });
+    language: text/javascript
+order: 2000
