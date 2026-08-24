@@ -1,0 +1,10 @@
+# Dependencias
+node_modules/
+
+# Variables de entorno (contienen credenciales)
+.env
+.env.local
+.env.*.local
+
+# Mantener la plantilla para documentar las variables requeridas
+!.env.example
