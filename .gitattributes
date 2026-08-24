@@ -1,0 +1,14 @@
+# Normalizar finales de linea entre Windows y Linux
+* text=auto eol=lf
+
+# Binarios (nunca transformar)
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.pdf binary
+*.zip binary

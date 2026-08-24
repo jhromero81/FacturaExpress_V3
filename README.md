@@ -49,9 +49,12 @@ colombianas (punto de venta, facturación con flujo DIAN, reportes y administrac
 
 ```
 FacturaExpress_V3/
-├── docker-compose.yml           # Orquestacion: MySQL + API + frontend
-├── .env.example                 # Plantilla de variables para Docker Compose
-├── .github/workflows/ci.yml     # CI: pruebas backend, build frontend y Newman
+├── package.json                   # Scripts raíz del monorepo (setup, dev, test…)
+├── package-lock.json              # Dependencias del orquestador raíz (concurrently)
+├── .gitattributes                 # Finales de línea LF (compatibilidad Windows/Linux)
+├── docker-compose.yml             # Orquestacion: MySQL + API + frontend
+├── .env.example                   # Plantilla de variables para Docker Compose
+├── .github/workflows/ci.yml       # CI: pruebas backend, build frontend y Newman
 ├── backend/                     # API REST Node.js + Express + MySQL
 │   ├── package.json             # Dependencias y scripts
 │   ├── .env.example             # Plantilla de variables de entorno
@@ -526,11 +529,58 @@ error `#e74c3c`, información `#3498db`.
 
 ### Requisitos
 
-- Node.js ≥ 20 (LTS recomendado)
+- Node.js ≥ 20 (la CI usa Node 22)
 - MySQL 8 corriendo localmente
-- npm 10+ (el `package.json` del frontend declara `allowScripts` para esbuild/rollup)
+- npm ≥ 10 (el `package.json` del frontend declara `allowScripts` compatibles con Windows y Linux)
 
-### Paso 1 — Backend: variables de entorno
+### Inicio rápido — scripts raíz del monorepo (recomendado)
+
+El repositorio incluye un `package.json` raíz que orquesta ambos proyectos
+con `concurrently`, de modo que todo se controla desde una sola terminal:
+
+```bash
+npm install                            # instala el orquestador raíz (concurrently)
+cp backend/.env.example backend/.env   # editar credenciales de MySQL locales
+npm run setup                          # instala dependencias y crea la BD (primera vez)
+npm run dev                            # API (4000) + web (4200) en paralelo
+```
+
+`Ctrl+C` detiene ambos procesos a la vez.
+
+| Comando raíz                     | Acción                                                    |
+| -------------------------------- | --------------------------------------------------------- |
+| `npm run setup`                  | Primera vez: instala dependencias y configura la base de datos. |
+| `npm run dev`                    | Backend (nodemon) + frontend (ng serve) simultáneamente.  |
+| `npm run dev:api`                | Solo la API en `http://localhost:4000`.                   |
+| `npm run dev:web`                | Solo el frontend en `http://localhost:4200`.              |
+| `npm run db:migrate` / `db:seed` | Solo tablas / solo datos de ejemplo.                      |
+| `npm test`                       | Pruebas unitarias de backend y frontend.                  |
+| `npm run build`                  | Build de producción del frontend.                         |
+
+Abrir `http://localhost:4200` e iniciar sesión con un usuario demo
+(ver sección 6). La sección de administración solo aparece para el rol admin.
+
+### Trabajo en dos equipos (Windows y Linux)
+
+El proyecto está preparado para desarrollarse indistintamente en Windows 11
+y Ubuntu gracias al `.gitattributes` (finales de línea LF) y a la política
+`allowScripts` del frontend (binarios nativos de esbuild/rollup para ambos SO).
+Solo se deben respetar dos reglas:
+
+1. **Nunca copiar ni sincronizar `node_modules/` ni `.env` entre equipos**
+   (los binarios nativos son específicos del sistema operativo).
+2. En cada equipo, tras clonar o actualizar el repo, ejecutar una sola vez:
+
+   ```bash
+   npm run install:all
+   cp -n backend/.env.example backend/.env   # crear solo si no existe
+   ```
+
+El uso diario es idéntico en ambos sistemas: `npm run dev`.
+
+### Instalación manual (alternativa, proyecto por proyecto)
+
+#### Paso 1 — Backend: variables de entorno
 
 ```bash
 cd backend
@@ -538,7 +588,7 @@ cp .env.example .env
 # Editar .env con las credenciales de MySQL locales
 ```
 
-### Paso 2 — Backend: dependencias y base de datos
+#### Paso 2 — Backend: dependencias y base de datos
 
 ```bash
 npm install
@@ -548,7 +598,7 @@ npm run db:migrate      # solo tablas
 npm run db:seed         # solo datos de ejemplo
 ```
 
-### Paso 3 — Iniciar la API
+#### Paso 3 — Iniciar la API
 
 ```bash
 npm start        # Producción
@@ -558,7 +608,7 @@ npm run dev      # Desarrollo (nodemon, recarga automática)
 La API queda disponible en `http://localhost:4000`
 (verificar en `http://localhost:4000/api/health`).
 
-### Paso 4 — Frontend
+#### Paso 4 — Frontend
 
 ```bash
 cd ../frontend
@@ -570,7 +620,7 @@ Abrir `http://localhost:4200` e iniciar sesión con el usuario demo.
 El menú lateral muestra los módulos principales para todos los roles y la
 sección de administración solo para el perfil admin.
 
-### Paso 5 — Build de producción
+#### Paso 5 — Build de producción
 
 ```bash
 cd frontend
@@ -782,6 +832,12 @@ Medidas implementadas para proteger la aplicación:
 git clone https://github.com/jhromero81/FacturaExpress_V3.git
 cd FacturaExpress_V3
 
+# Primera puesta en marcha (instala dependencias y crea la BD)
+npm run setup
+
+# Uso diario
+npm run dev
+
 # Flujo de trabajo
 git checkout -b feature/mi-funcionalidad
 git add .
@@ -789,5 +845,9 @@ git commit -m "feat: descripción corta de la funcionalidad"
 git push origin feature/mi-funcionalidad
 ```
 
-> Los archivos `backend/.env` y `frontend/node_modules` permanecen fuera del
-> repositorio (incluidos en `.gitignore`).
+> Los archivos `backend/.env` y las carpetas `node_modules/` permanecen fuera del
+> repositorio (incluidos en `.gitignore`); los `package.json` y `package-lock.json`
+> de la raíz y de cada proyecto sí se versionan. El `.gitattributes` normaliza los
+> finales de línea a LF; si el repositorio contiene archivos con CRLF históricos,
+> ejecutar una sola vez `git add --renormalize .` en el primer commit posterior a
+> su inclusión.

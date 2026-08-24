@@ -380,8 +380,13 @@ enviado | pendiente | procesando | rechazado | anulada
 
 ## 6. Instalación y puesta en marcha
 
+> **Monorepositorio:** estos pasos son solo para trabajar directamente dentro
+> de `backend/`. Desde la raíz del repositorio puede usar los scripts
+> orquestados: `npm run setup` (primera vez) y `npm run dev` (levanta API y
+> frontend juntos). Ver el README raíz, sección 7.
+
 ### Requisitos
-- Node.js ≥ 18
+- Node.js ≥ 20 (la CI usa Node 22)
 - MySQL 8 corriendo localmente
 
 ### Paso 1 — Configurar variables de entorno

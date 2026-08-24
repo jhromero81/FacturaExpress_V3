@@ -14,7 +14,10 @@
     "esbuild@*": true,
     "@esbuild/*": true,
     "rollup@*": true,
-    "@rollup/rollup-native-win32-x64-msvc@*": true
+    "@parcel/watcher@*": true,
+    "lmdb@*": true,
+    "msgpackr-extract@*": true,
+    "@rollup/*": true
   },
   "dependencies": {
     "@angular/common": "^22.1.0",

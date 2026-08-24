@@ -1,59 +1,65 @@
-# FacturaexpressFrontend
+# FacturaExpress — Frontend
 
-This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 22.1.5.
+Aplicación web **Angular 22** (componentes standalone, sin NgModules) para el
+sistema de facturación electrónica FacturaExpress. Consume la API REST del
+backend (`http://localhost:4000`) a través del proxy `/api` del dev-server.
 
-## Development server
+> **Monorepositorio:** normalmente no necesita ejecutar nada aquí directamente.
+> Desde la raíz del repositorio use `npm run dev` para levantar backend y
+> frontend juntos (ver README raíz, sección 7).
 
-To start a local development server, run:
+## Requisitos
 
-```bash
-ng serve
-```
+- Node.js ≥ 20 y npm ≥ 10
+- Backend en marcha en `http://localhost:4000` (o Docker Compose)
 
-Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.
-
-## Code scaffolding
-
-Angular CLI includes powerful code scaffolding tools. To generate a new component, run:
-
-```bash
-ng generate component component-name
-```
-
-For a complete list of available schematics (such as `components`, `directives`, or `pipes`), run:
+## Instalación
 
 ```bash
-ng generate --help
+npm install
 ```
 
-## Building
+> El `package.json` declara la sección `allowScripts` con los binarios nativos
+> de esbuild/rollup/lmdb/etc. para **Windows y Linux**, requerida por la
+> política de scripts de instalación de npm 11.
 
-To build the project run:
+## Servidor de desarrollo
 
 ```bash
-ng build
+npm start        # equivalente a: ng serve --proxy-config proxy.conf.json
 ```
 
-This will compile your project and store the build artifacts in the `dist/` directory. By default, the production build optimizes your application for performance and speed.
+Abra `http://localhost:4200`. El proxy redirige `/api` → `http://localhost:4000`
+(`proxy.conf.json`), por lo que no hay CORS en desarrollo. La aplicación se
+recarga automáticamente al editar los archivos fuente.
 
-## Running unit tests
-
-To execute unit tests with the [Vitest](https://vitest.dev/) test runner, use the following command:
+## Build de producción
 
 ```bash
-ng test
+npm run build
+# → dist/facturaexpress-frontend/browser (estático listo para publicar)
 ```
 
-## Running end-to-end tests
+Para publicarlo, sirva esa carpeta con cualquier servidor estático que
+redirija `/api` hacia la API en el mismo origen (en Docker lo hace nginx,
+ver `nginx.conf`).
 
-For end-to-end (e2e) testing, run:
+## Pruebas unitarias
 
 ```bash
-ng e2e
+npm test         # Vitest con navegador jsdom
 ```
 
-Angular CLI does not come with an end-to-end testing framework by default. You can choose one that suits your needs.
+## Estructura relevante
 
-## Additional Resources
+| Ruta                          | Contenido                                        |
+| ----------------------------- | ------------------------------------------------ |
+| `src/app/core/`               | `api.service`, `auth.service`, guards, interceptors |
+| `src/app/features/layout/`    | Shell (sidebar + topbar + router-outlet)          |
+| `src/app/features/…`          | 12 módulos funcionales con carga diferida         |
+| `src/app/shared/components/`  | Modal, toasts, paginador, badges                  |
+| `src/environments/`           | Configuración por entorno                         |
+| `proxy.conf.json`             | Proxy `/api` → backend en desarrollo              |
 
-For more information on using the Angular CLI, including detailed command references, visit the [Angular CLI Overview and Command Reference](https://angular.dev/tools/cli) page.
+Más detalles de arquitectura, rutas y sistema de diseño en el
+[README raíz](../README.md), sección 5.
