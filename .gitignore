@@ -16,6 +16,9 @@ coverage/
 logs/
 newman-report.json
 
+# Documentacion y evidencias (solo local)
+docs/
+
 # Sistema operativo y editores
 .DS_Store
 Thumbs.db
