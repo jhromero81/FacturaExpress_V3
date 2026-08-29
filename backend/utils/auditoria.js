@@ -9,18 +9,16 @@
 const { pool } = require('../config/db');
 
 /**
- * Obtiene la direccion IP real del cliente, priorizando el
- * encabezado X-Forwarded-For cuando existe (proxies inversos).
+ * Obtiene la direccion IP real del cliente. Con "trust proxy"
+ * configurado, req.ip ya resuelve el encabezado X-Forwarded-For de
+ * forma confiable; en caso contrario se usa la IP de la conexion.
+ * Nunca se confia en X-Forwarded-For de manera ciega (evita spoofing).
  * @param {object} req - Objeto de peticion de Express.
  * @returns {string} IP de origen de la peticion.
  */
 function getClientIp(req) {
-  const forwarded = req.headers['x-forwarded-for'];
-  if (forwarded) {
-    const primera = String(forwarded).split(',')[0].trim();
-    if (primera) return primera;
-  }
-  return req.ip || 'desconocida';
+  const ip = req.ip || (req.socket && req.socket.remoteAddress) || 'desconocida';
+  return String(ip).replace(/^::ffff:/, '') || 'desconocida';
 }
 
 /**

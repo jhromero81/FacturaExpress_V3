@@ -44,6 +44,7 @@ export const routes: Routes = [
       },
       {
         path: 'configuracion',
+        canActivate: [adminGuard],
         loadComponent: () =>
           import('./features/configuracion/configuracion.component').then((m) => m.ConfiguracionComponent),
       },
@@ -54,6 +55,7 @@ export const routes: Routes = [
       },
       {
         path: 'errores',
+        canActivate: [adminGuard],
         loadComponent: () => import('./features/admin/errores.component').then((m) => m.ErroresComponent),
       },
       {

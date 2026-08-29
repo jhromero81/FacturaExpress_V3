@@ -189,13 +189,22 @@ const adjustStock = asyncHandler(async (req, res) => {
     throw createHttpError(400, 'La cantidad debe ser un entero distinto de cero.');
   }
 
+  const cantidadNum = Number(cantidad);
+
   const [result] = await pool.query(
-    'UPDATE productos SET stock = stock + ? WHERE id = ? AND activo = 1',
-    [Number(cantidad), req.params.id]
+    'UPDATE productos SET stock = stock + ? WHERE id = ? AND activo = 1 AND stock + ? >= 0',
+    [cantidadNum, req.params.id, cantidadNum]
   );
 
   if (result.affectedRows === 0) {
-    throw createHttpError(404, 'Producto no encontrado.');
+    const [existe] = await pool.query(
+      'SELECT id, stock FROM productos WHERE id = ? AND activo = 1',
+      [req.params.id]
+    );
+    if (existe.length === 0) {
+      throw createHttpError(404, 'Producto no encontrado.');
+    }
+    throw createHttpError(400, `Stock insuficiente: el producto solo tiene ${existe[0].stock} unidades.`);
   }
 
   const [rows] = await pool.query(

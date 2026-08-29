@@ -40,10 +40,12 @@ export class NuevaVentaComponent {
   cart: ItemCarrito[] = [];
   cliente: Cliente | null = null;
 
-  loading = true;
+loading = true;
   errorCatalogo = false;
   isFinalizing = false;
   showClientModal = false;
+  private pendienteCatalogo = 0;
+  private falloCatalogo = false;
 
   searchTerm = '';
   clientNitSearch = '';
@@ -61,10 +63,13 @@ export class NuevaVentaComponent {
     this.cargarCatalogo();
   }
 
-  /** Carga clientes y productos; en error muestra estado con reintento. */
+/** Carga clientes y productos de forma independiente; el flag de
+   *  carga solo se apaga cuando ambas peticiones completan. */
   cargarCatalogo(): void {
     this.loading = true;
     this.errorCatalogo = false;
+    this.pendienteCatalogo = 2;
+    this.falloCatalogo = false;
 
     this.api.get<{ success: boolean; clientes: Cliente[] }>('/clientes').subscribe({
       next: (res) => {
@@ -73,22 +78,29 @@ export class NuevaVentaComponent {
       },
       error: (err) => {
         this.toast.mostrar(mensajeError(err), 'error');
-        this.errorCatalogo = true;
-        this.loading = false;
+        this.falloCatalogo = true;
       },
+      complete: () => this.cerrarCargarCatalogo(),
     });
 
     this.api.get<{ success: boolean; productos: Producto[] }>('/productos').subscribe({
       next: (res) => {
         this.productos = res.productos ?? [];
-        this.loading = false;
       },
       error: (err) => {
         this.toast.mostrar(mensajeError(err), 'error');
-        this.errorCatalogo = true;
-        this.loading = false;
+        this.falloCatalogo = true;
       },
+      complete: () => this.cerrarCargarCatalogo(),
     });
+  }
+
+  /** Apaga el estado de carga cuando ambas peticiones del catalogo terminaron. */
+  private cerrarCargarCatalogo(): void {
+    this.pendienteCatalogo -= 1;
+    if (this.pendienteCatalogo > 0) return;
+    this.errorCatalogo = this.falloCatalogo;
+    this.loading = false;
   }
 
   /** Restaura el cliente preseleccionado desde el modulo de clientes (un solo uso). */

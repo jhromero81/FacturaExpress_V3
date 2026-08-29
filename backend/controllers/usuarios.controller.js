@@ -14,8 +14,8 @@ const { registrarAuditoria } = require('../utils/auditoria');
 /** Roles permitidos del sistema */
 const ROLES_VALIDOS = ['admin', 'vendedor', 'contador'];
 
-/** Longitud minima de la contrasena */
-const MIN_PASSWORD = 4;
+/** Longitud minima de la contrasena (coincide con los validators) */
+const MIN_PASSWORD = 6;
 
 /**
  * Normaliza una fila de usuarios a la estructura JSON del frontend.

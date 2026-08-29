@@ -20,7 +20,12 @@ require.cache[dbPath] = {
   loaded: true,
   exports: {
     pool: {
-      query: async () => [[{ total: 4 }]],
+      query: async (sql) => {
+        const q = String(sql);
+        if (q.includes('GET_LOCK')) return [[{ ok: 1 }]];
+        if (q.includes('RELEASE_LOCK')) return [[{ ok: 1 }]];
+        return [[{ total: 4 }]];
+      },
     },
     testConnection: async () => {},
   },
@@ -216,12 +221,27 @@ test('generateInvoiceNumber genera la siguiente posicion del mes (stub pool)', a
   const year = ahora.getFullYear();
   const month = String(ahora.getMonth() + 1).padStart(2, '0');
 
-  dbStub.pool.query = async () => [[{ total: 4 }]];
+  dbStub.pool.query = async (sql) => {
+    const q = String(sql);
+    if (q.includes('GET_LOCK')) return [[{ ok: 1 }]];
+    if (q.includes('RELEASE_LOCK')) return [[{ ok: 1 }]];
+    return [[{ total: 4 }]];
+  };
   assert.equal(await helpers.generateInvoiceNumber(), `FAC-${year}${month}-00005`);
 
-  dbStub.pool.query = async () => [[{ total: 0 }]];
+  dbStub.pool.query = async (sql) => {
+    const q = String(sql);
+    if (q.includes('GET_LOCK')) return [[{ ok: 1 }]];
+    if (q.includes('RELEASE_LOCK')) return [[{ ok: 1 }]];
+    return [[{ total: 0 }]];
+  };
   assert.equal(await helpers.generateInvoiceNumber(), `FAC-${year}${month}-00001`);
 
-  dbStub.pool.query = async () => [[{ total: 99 }]];
+  dbStub.pool.query = async (sql) => {
+    const q = String(sql);
+    if (q.includes('GET_LOCK')) return [[{ ok: 1 }]];
+    if (q.includes('RELEASE_LOCK')) return [[{ ok: 1 }]];
+    return [[{ total: 99 }]];
+  };
   assert.equal(await helpers.generateInvoiceNumber(), `FAC-${year}${month}-00100`);
 });

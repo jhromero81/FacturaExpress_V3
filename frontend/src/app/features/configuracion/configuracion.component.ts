@@ -58,12 +58,7 @@ export class ConfiguracionComponent {
     fechaExpiracionCert: '2026-12-31',
     ultimaSync: new Date().toISOString(),
   };
-  notificaciones: Notificaciones = {
-    email: true,
-    push: true,
-    dianAlerts: true,
-    recordatorios: false,
-  };
+notificaciones: Notificaciones = this.leerNotificaciones();
   seguridad: Seguridad = {
     ultimoCambioPass: '2026-01-15',
     dispositivosConectados: 3,
@@ -132,12 +127,30 @@ export class ConfiguracionComponent {
       });
   }
 
-  guardarNotificaciones(): void {
+guardarNotificaciones(): void {
     localStorage.setItem(
       CLAVE_CONFIG,
       JSON.stringify({ notificaciones: this.notificaciones })
     );
     this.toast.mostrar('Preferencias de notificacion guardadas', 'success');
+  }
+
+  /** Restaura las preferencias de notificacion persistidas en localStorage. */
+  private leerNotificaciones(): Notificaciones {
+    const def: Notificaciones = {
+      email: true,
+      push: true,
+      dianAlerts: true,
+      recordatorios: false,
+    };
+    try {
+      const crudo = localStorage.getItem(CLAVE_CONFIG);
+      if (!crudo) return def;
+      const guardado = JSON.parse(crudo) as { notificaciones?: Partial<Notificaciones> };
+      return { ...def, ...(guardado.notificaciones ?? {}) };
+    } catch {
+      return def;
+    }
   }
 
   irA(ruta: string): void {

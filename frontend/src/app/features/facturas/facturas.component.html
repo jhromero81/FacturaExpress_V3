@@ -91,14 +91,16 @@
                   <button type="button" class="doc-btn view" (click)="openDetail(factura)" title="Ver detalle">
                     <span class="material-icons">visibility</span>
                   </button>
-                  <button
-                    type="button"
-                    class="doc-btn change"
-                    (click)="changeEstado(factura, factura.estado === 'pendiente' ? 'enviada' : 'pendiente')"
-                    title="{{ factura.estado === 'pendiente' ? 'Marcar como enviada' : 'Marcar como pendiente' }}"
-                  >
-                    <span class="material-icons">swap_horiz</span>
-                  </button>
+                  @if (factura.estado === 'pendiente' || factura.estado === 'enviada') {
+                    <button
+                      type="button"
+                      class="doc-btn change"
+                      (click)="changeEstado(factura, factura.estado === 'pendiente' ? 'enviada' : 'pendiente')"
+                      title="{{ factura.estado === 'pendiente' ? 'Marcar como enviada' : 'Marcar como pendiente' }}"
+                    >
+                      <span class="material-icons">swap_horiz</span>
+                    </button>
+                  }
                   @if (factura.estado !== 'enviada') {
                     <button type="button" class="doc-btn del" (click)="handleDelete(factura)" title="Eliminar factura">
                       <span class="material-icons">delete</span>
@@ -214,6 +216,7 @@
           }
         </div>
         <div class="modal-footer">
+          @if (sel.estado === 'pendiente' || sel.estado === 'enviada') {
           <button
             type="button"
             class="btn-outline-accent btn-sm"
@@ -223,6 +226,7 @@
             <span class="material-icons">swap_horiz</span>
             {{ sel.estado === 'pendiente' ? 'Marcar Enviada' : 'Marcar Pendiente' }}
           </button>
+        }
           <button type="button" class="btn-outline-accent btn-sm" (click)="downloadPDF(sel)" title="Descargar PDF">
             <span class="material-icons">picture_as_pdf</span>
             PDF

@@ -21,6 +21,23 @@ function estadoLabel(estado: string): string {
   return estado ? estado.charAt(0).toUpperCase() + estado.slice(1) : '';
 }
 
+/**
+ * Escapa una celda para CSV (RFC 4180) y neutraliza la inyeccion de
+ * formulas: los valores que inician con = + - @ o tabulador se les
+ * antepone una comilla simple, y se entrecomillan los que contienen
+ * comas, comillas dobles o saltos de linea.
+ */
+function csvCell(valor: unknown): string {
+  const str = String(valor ?? '');
+  if (/^[=+\-@\t\r]/.test(str)) {
+    return `'${str.replace(/"/g, '""')}`;
+  }
+  if (/[",\r\n]/.test(str)) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return str;
+}
+
 @Component({
   selector: 'app-facturas',
   standalone: true,
@@ -79,10 +96,11 @@ export class FacturasComponent {
     return this.filteredFacturas.slice(start, start + ITEMS_PER_PAGE);
   }
 
-  constructor() {
+constructor() {
     this.api.get<{ success: boolean; facturas: Factura[] }>('/facturas?limite=500').subscribe({
       next: (res) => {
         this.facturas = res.facturas ?? [];
+        this.ajustarPagina();
         this.loading = false;
       },
       error: (err) => {
@@ -92,14 +110,21 @@ export class FacturasComponent {
     });
   }
 
+  /** Evita que currentPage quede fuera de rango tras filtrar, buscar o eliminar. */
+  private ajustarPagina(): void {
+    this.currentPage = Math.max(1, Math.min(this.currentPage || 1, Math.max(1, this.totalPages)));
+  }
+
   cambiarFiltro(filtro: string): void {
     this.statusFilter = filtro;
     this.currentPage = 1;
+    this.ajustarPagina();
   }
 
   onBuscar(valor: string): void {
     this.searchTerm = valor;
     this.currentPage = 1;
+    this.ajustarPagina();
   }
 
   goToPage(page: number): void {
@@ -153,11 +178,12 @@ export class FacturasComponent {
     this.api
       .put<{ success: boolean; message: string; factura: Factura }>(`/facturas/${factura.id}/estado`, { estado })
       .subscribe({
-        next: (res) => {
+next: (res) => {
           this.facturas = this.facturas.map((f) => (f.id === factura.id ? res.factura : f));
           if (this.selected?.id === factura.id) {
             this.selected = { ...this.selected, ...res.factura };
           }
+          this.ajustarPagina();
           this.toast.mostrar(res.message || 'Estado actualizado', 'success');
         },
         error: (err) => this.toast.mostrar(mensajeError(err), 'error'),
@@ -170,10 +196,11 @@ export class FacturasComponent {
       return;
     }
     this.api.delete<{ success: boolean; message: string }>(`/facturas/${factura.id}`).subscribe({
-      next: (res) => {
+next: (res) => {
         this.toast.mostrar(res.message || 'Factura eliminada', 'success');
         this.facturas = this.facturas.filter((f) => f.id !== factura.id);
         if (this.selected?.id === factura.id) this.selected = null;
+        this.ajustarPagina();
       },
       error: (err) => this.toast.mostrar(mensajeError(err), 'error'),
     });
@@ -197,7 +224,7 @@ export class FacturasComponent {
       String(f.total),
     ]);
 
-    const csv = [headers, ...rows].map((row) => row.join(',')).join('\n');
+    const csv = [headers, ...rows].map((row) => row.map(csvCell).join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');

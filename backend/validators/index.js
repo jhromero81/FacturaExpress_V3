@@ -170,8 +170,8 @@ const createFacturaValidator = [
     .toInt(),
   body('descuento')
     .optional({ values: 'falsy' })
-    .isFloat({ min: 0 })
-    .withMessage('El descuento debe ser un numero mayor o igual a 0.')
+    .isFloat({ min: 0, max: 100 })
+    .withMessage('El descuento debe ser un porcentaje entre 0 y 100.')
     .toFloat(),
 ];
 
@@ -183,7 +183,7 @@ const updateEstadoFacturaValidator = [
   body('estado')
     .notEmpty()
     .withMessage('El estado es obligatorio.')
-    .isIn(['pendiente', 'enviado', 'enviada', 'procesando', 'rechazado', 'anulada'])
+    .isIn(['pendiente', 'enviada', 'rechazada'])
     .withMessage('El estado no es un valor DIAN valido.'),
 ];
 

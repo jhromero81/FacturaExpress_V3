@@ -54,10 +54,9 @@ npm test         # Vitest con navegador jsdom
 
 | Ruta                          | Contenido                                        |
 | ----------------------------- | ------------------------------------------------ |
-| `src/app/core/`               | `api.service`, `auth.service`, guards, interceptors |
+| `src/app/core/`               | `api.service`, `auth.service`, guards, interceptors, formatters, modelos |
 | `src/app/features/layout/`    | Shell (sidebar + topbar + router-outlet)          |
-| `src/app/features/…`          | 12 módulos funcionales con carga diferida         |
-| `src/app/shared/components/`  | Modal, toasts, paginador, badges                  |
+| `src/app/features/…`          | Módulos funcionales standalone con carga diferida (login, dashboard, ventas, facturas, clientes, productos, reportes, configuración y administración) |
 | `src/environments/`           | Configuración por entorno                         |
 | `proxy.conf.json`             | Proxy `/api` → backend en desarrollo              |
 

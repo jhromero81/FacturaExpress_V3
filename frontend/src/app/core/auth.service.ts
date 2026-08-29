@@ -1,10 +1,11 @@
 /**
  * core/auth.service.ts
  * Gestion de la sesion del usuario y preferencias de accesibilidad.
- * La API entrega el token JWT en una cookie httpOnly; ademas se
- * conserva una copia del token y del perfil en sessionStorage para
- * restaurar la sesion al recargar. Las preferencias visuales (modo
- * oscuro, alto contraste, tamano de texto) se persisten en localStorage.
+ * La API entrega el token JWT en una cookie httpOnly (no accesible
+ * desde JS), lo que reduce la exposicion a XSS; en sessionStorage solo
+ * se conserva el perfil para restaurar la sesion al recargar. Las
+ * preferencias visuales (modo oscuro, alto contraste, tamano de texto)
+ * se persisten en localStorage.
  */
 
 import { Injectable, computed, effect, inject, signal } from '@angular/core';
@@ -12,7 +13,6 @@ import { Router } from '@angular/router';
 import { ApiService } from './api.service';
 import { LoginResponse, Usuario } from './models';
 
-const CLAVE_TOKEN = 'fx_token';
 const CLAVE_USUARIO = 'fx_usuario';
 const CLAVE_LOGIN = 'fx_login_time';
 const CLAVE_PREFS = 'fx_prefs';
@@ -77,10 +77,11 @@ export class AuthService {
     return this.api.post<LoginResponse>('/auth/login', { nit, password });
   }
 
-  /** Guarda la sesion tras un login exitoso. */
+  /** Guarda la sesion tras un login exitoso. El token queda solo en
+   *  la cookie httpOnly; aqui se conserva el perfil para restaurarlo
+   *  al recargar la pagina. */
   establecerSesion(respuesta: LoginResponse) {
     const ahora = new Date().toISOString();
-    sessionStorage.setItem(CLAVE_TOKEN, respuesta.token);
     sessionStorage.setItem(CLAVE_USUARIO, JSON.stringify(respuesta.usuario));
     sessionStorage.setItem(CLAVE_LOGIN, ahora);
     this.loginTime.set(ahora);
@@ -97,7 +98,6 @@ export class AuthService {
 
   /** Limpia el estado local y redirige al login. */
   limpiarSesion() {
-    sessionStorage.removeItem(CLAVE_TOKEN);
     sessionStorage.removeItem(CLAVE_USUARIO);
     sessionStorage.removeItem(CLAVE_LOGIN);
     this.loginTime.set(null);

@@ -37,6 +37,22 @@ const app = express();
 const PORT = Number(process.env.PORT || 4000);
 const CORS_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:4200';
 
+/**
+ * Detras de un proxy inverso (nginx en produccion) Express debe confiar
+ * en el encabezado X-Forwarded-For para conocer la IP real del cliente;
+ * sin esto, el rate limiting y la auditoria verian siempre la IP del
+ * proxy. Configurable con TRUST_PROXY (numero de saltos, 'loopback',
+ * 'false' o lista de IPs).
+ */
+function resolveTrustProxy() {
+  const valor = process.env.TRUST_PROXY;
+  if (valor !== undefined && valor !== '') {
+    return /^\d+$/.test(valor) ? Number(valor) : valor;
+  }
+  return process.env.NODE_ENV === 'production' ? 1 : 'loopback';
+}
+app.set('trust proxy', resolveTrustProxy());
+
 // Middlewares globales
 // Helmet: cabeceras HTTP de seguridad (CSP, X-Frame-Options, etc.)
 app.use(helmet());

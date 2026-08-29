@@ -75,28 +75,47 @@ export class DashboardComponent {
   /** Dia seleccionado al hacer clic en una barra. */
   detailBar = signal<DiaSemana | null>(null);
 
-  constructor() {
+constructor() {
     this.api.get<{ success: boolean; kpis: KPIs }>('/reportes/kpis').subscribe({
-      next: (res) => this.kpis.set(res.kpis ?? null),
+      next: (res) => {
+        this.kpis.set(res.kpis ?? null);
+        this.loading.set(false);
+      },
+      error: () => this.loading.set(false),
     });
 
     this.api
       .get<{ success: boolean; ventas: Array<{ dia: string; facturas: number; total: number }> }>(
         '/reportes/ventas-semanales'
       )
-      .subscribe((res) => this.ventasSemanales.set(res.ventas ?? []));
+      .subscribe({
+        next: (res) => {
+          this.ventasSemanales.set(res.ventas ?? []);
+          this.loading.set(false);
+        },
+        error: () => this.loading.set(false),
+      });
 
     this.api
       .get<{ success: boolean; transacciones: Transaccion[] }>(
         '/reportes/ultimas-transacciones?limite=4'
       )
-      .subscribe((res) => this.transacciones.set(res.transacciones ?? []));
+      .subscribe({
+        next: (res) => {
+          this.transacciones.set(res.transacciones ?? []);
+          this.loading.set(false);
+        },
+        error: () => this.loading.set(false),
+      });
 
     this.api
       .get<{ success: boolean; productos: ProductoTop[] }>('/reportes/productos-top?limite=4')
-      .subscribe((res) => {
-        this.topProducts.set(res.productos ?? []);
-        this.loading.set(false);
+      .subscribe({
+        next: (res) => {
+          this.topProducts.set(res.productos ?? []);
+          this.loading.set(false);
+        },
+        error: () => this.loading.set(false),
       });
   }
 

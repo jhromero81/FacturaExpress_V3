@@ -28,21 +28,29 @@ backend/
 ├── server.js                 # Punto de entrada de la API
 ├── config/
 │   ├── db.js                 # Pool de conexiones MySQL
-│   └── jwt.js                # Generación y verificación de tokens
+│   └── jwt.js                # Generación, verificación y revocación de tokens
 ├── controllers/
 │   ├── auth.controller.js    # Inicio de sesión y usuario actual
 │   ├── clientes.controller.js
 │   ├── productos.controller.js
 │   ├── facturas.controller.js # Ventas + facturación electrónica
 │   ├── configuracion.controller.js
-│   └── reportes.controller.js
+│   ├── reportes.controller.js
+│   ├── usuarios.controller.js
+│   ├── errores.controller.js
+│   ├── logs.controller.js
+│   └── backup.controller.js
 ├── routes/
 │   ├── auth.routes.js
 │   ├── clientes.routes.js
 │   ├── productos.routes.js
 │   ├── facturas.routes.js
 │   ├── configuracion.routes.js
-│   └── reportes.routes.js
+│   ├── reportes.routes.js
+│   ├── usuarios.routes.js
+│   ├── errores.routes.js
+│   ├── logs.routes.js
+│   └── backup.routes.js
 ├── middleware/
 │   ├── auth.js               # JWT (cookie httpOnly o Bearer) + autorización por rol
 │   ├── errorHandler.js       # 404, errores centrales, asyncHandler
@@ -51,13 +59,27 @@ backend/
 ├── validators/
 │   └── index.js              # Reglas de validación por módulo
 ├── utils/
-│   └── helpers.js            # Números de factura, IVA, mapeadores
+│   ├── helpers.js            # Números de factura, IVA, mapeadores, escapes
+│   ├── auditoria.js          # Registro de logs de auditoría (con IP real)
+│   ├── cune.js               # Generación del hash CUNE (simulación DIAN)
+│   └── errores.js            # Registro de errores del sistema
+├── services/
+│   ├── backup.service.js     # Respaldos y restauración SQL
+│   ├── email.service.js      # Envío de facturas por correo (nodemailer)
+│   └── pdf.service.js        # Generación de PDF (PDFKit)
 ├── db/
 │   ├── schema.sql            # Creación de BD y tablas
 │   └── seedData.js           # Datos por defecto (semejantes al frontend)
-└── scripts/
-    ├── setupDb.js            # Preparación en un paso (db:setup)
-    └── seed.js               # Población de datos de ejemplo (db:seed)
+├── scripts/
+│   ├── setupDb.js            # Preparación en un paso (db:setup)
+│   ├── migrate.js            # Migraciones idempotentes (db:migrate)
+│   └── seed.js               # Población de datos de ejemplo (db:seed)
+└── test/                     # Pruebas unitarias (node --test)
+    ├── cune.test.js
+    ├── helpers.test.js
+    ├── jwt.test.js
+    ├── validate.test.js
+    └── validators.test.js
 ```
 
 ---
@@ -269,7 +291,7 @@ La estructura de respuesta es consistente:
 | GET    | `/api/facturas/:id`    | Sí        | Factura completa con sus items.                  |
 | POST   | `/api/facturas`        | Sí        | **Finaliza una venta** y genera la factura electrónica. |
 | PUT    | `/api/facturas/:id/estado` | Sí    | Actualiza el estado DIAN de una factura.         |
-| DELETE | `/api/facturas/:id`    | Sí        | Anula una factura (estado `anulada`).            |
+| DELETE | `/api/facturas/:id`    | Sí        | Elimina físicamente una factura pendiente (**restituye el stock**). |
 | GET    | `/api/facturas/:id/xml` | Sí       | Genera el XML de la factura (formato DIAN).      |
 | GET    | `/api/facturas/:id/csv` | Sí       | Genera el CSV con datos de la factura.           |
 
@@ -278,29 +300,29 @@ La estructura de respuesta es consistente:
 1. Valida que el `clienteId` exista y esté activo.
 2. Valida los items y sus cantidades contra el catálogo y el **stock disponible**.
 3. Calcula **subtotal, IVA (19%) y total** del lado del servidor (no confía en el cliente).
-4. Genera el número secuencial `FAC-YYYYMM-XXXXX`.
+4. Genera el número secuencial `FAC-YYYYMM-XXXXX` **bajo un advisory lock de MySQL** para evitar colisiones en ventas concurrentes.
 5. Inserta factura + items y **descuenta el stock** dentro de una **transacción atómica**; si algo falla, revierte todo.
 
 ```json
-// Body de entrada
+// Body de entrada (descuento es un PORCENTAJE entre 0 y 100)
 {
   "clienteId": 1,
   "items": [
     { "productoId": 1, "cantidad": 2 },
     { "productoId": 3, "cantidad": 1 }
   ],
-  "descuento": 5000
+  "descuento": 10
 }
 
-// Respuesta 201 Created
+// Respuesta 201 Created (el descuento almacenado es el monto en pesos)
 {
   "success": true,
   "message": "Venta finalizada: FAC-202608-00001",
   "factura": {
     "id": 1, "numero": "FAC-202608-00001", "fecha": "2026-08-07T05:19:04.000Z",
     "cliente": { "id": 1, "identificacion": "80.123.456-1", "nombre": "Constructora Moderna S.A.S" },
-    "subtotal": 420000, "iva": 79800, "descuento": 5000, "total": 494800,
-    "estado": "enviado", "cufe": null,
+    "subtotal": 420000, "iva": 79800, "descuento": 42000, "total": 457800,
+    "estado": "pendiente", "cufe": null,
     "items": [
       { "id": 1, "codigo": "PROD001", "nombre": "Insumo Industrial X", "cantidad": 2,
         "precioUnitario": 85000, "iva": 32300, "subtotal": 170000 },
@@ -314,14 +336,15 @@ La estructura de respuesta es consistente:
 | Código | Situación                                              |
 | ------ | ------------------------------------------------------ |
 | 201    | Venta finalizada y factura generada.                   |
-| 400    | Datos de entrada inválidos.                            |
+| 400    | Datos de entrada inválidos (incluye descuento > 100).  |
 | 404    | Cliente no encontrado.                                 |
 | 409    | Stock insuficiente para algún producto.                |
+| 503    | No se obtuvo el bloqueo de numeración (reintentar).    |
 
 **Estados DIAN válidos** (para el campo `estado`):
 
 ```
-enviado | pendiente | procesando | rechazado | anulada
+pendiente | enviada | rechazada
 ```
 
 **`GET /api/facturas` — parámetros de filtrado:**
@@ -484,7 +507,8 @@ Medidas implementadas para proteger la API:
 | **CORS restringido** | Solo el origen del frontend (`CORS_ORIGIN`) puede consumir la API con credenciales. |
 
 > **Variables relevantes**: `NODE_ENV` (development/production), `JWT_SECRET`
-> (obligatorio en producción), `JWT_EXPIRES_IN`, `CORS_ORIGIN`.
+> (obligatorio en producción), `JWT_EXPIRES_IN`, `CORS_ORIGIN`, `TRUST_PROXY`
+> (saltos de proxy inverso; sin configurarlo, el rate limit y la auditoría verían la IP del proxy).
 
 ---
 
@@ -509,7 +533,7 @@ Medidas implementadas para proteger la API:
 | 15| Facturación    | GET    | `/api/facturas/:id`                  | Consultar factura con items.               |
 | 16| Facturación    | POST   | `/api/facturas`                      | Finalizar venta y generar factura.         |
 | 17| Facturación    | PUT    | `/api/facturas/:id/estado`           | Actualizar estado DIAN.                    |
-| 18| Facturación    | DELETE | `/api/facturas/:id`                  | Anular factura.                            |
+| 18| Facturación    | DELETE | `/api/facturas/:id`                  | Eliminar factura pendiente (restituye stock). |
 | 19| Facturación    | GET    | `/api/facturas/:id/xml`              | Generar XML DIAN de la factura.            |
 | 20| Facturación    | GET    | `/api/facturas/:id/csv`              | Generar CSV de la factura.                 |
 | 21| Configuración  | GET    | `/api/configuracion`                 | Consultar empresa y configuración fiscal.  |

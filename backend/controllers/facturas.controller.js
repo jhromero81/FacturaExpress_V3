@@ -13,7 +13,9 @@ const { pool } = require('../config/db');
 const { asyncHandler, createHttpError } = require('../middleware/errorHandler');
 const {
   calcularIVA,
-  generateInvoiceNumber,
+  adquirirLockNumeracion,
+  liberarLockNumeracion,
+  calcularSiguienteNumero,
   isValidPositiveInt,
   isRequiredString,
   escapeXML,
@@ -216,21 +218,30 @@ const createFactura = asyncHandler(async (req, res) => {
   const ivaTotal = Math.round(baseGravable * IVA_TARIFA);
   const total = baseGravable + ivaTotal;
 
-  // ---- Generar numero secuencial y CUNE ----
-  const numero = await generateInvoiceNumber();
-  const cufe = generarCUNE({
-    numero,
-    clienteId: cliente.id,
-    clienteNit: cliente.identificacion,
-    total,
-    fecha: new Date(),
-  });
-
   // ---- Transaccion: factura + items + descuento de stock ----
+  // La numeracion se genera DENTRO de la transaccion bajo un advisory
+  // lock para evitar numeros duplicados en ventas concurrentes.
   const connection = await pool.getConnection();
+  let numero = null;
   let facturaId = null;
+  let factura = null;
+  let lockNumeracion = false;
   try {
     await connection.beginTransaction();
+
+    lockNumeracion = await adquirirLockNumeracion(connection);
+    if (!lockNumeracion) {
+      throw createHttpError(503, 'No fue posible obtener el bloqueo de numeracion. Intente de nuevo.');
+    }
+
+    numero = await calcularSiguienteNumero(connection);
+    const cufe = generarCUNE({
+      numero,
+      clienteId: cliente.id,
+      clienteNit: cliente.identificacion,
+      total,
+      fecha: new Date(),
+    });
 
     const [result] = await connection.query(
       `INSERT INTO facturas
@@ -290,7 +301,7 @@ const createFactura = asyncHandler(async (req, res) => {
       [facturaId]
     );
 
-    const factura = { ...mapFacturaRow(facturas[0]), items: itemsFactura.map(mapItemRow) };
+    factura = { ...mapFacturaRow(facturas[0]), items: itemsFactura.map(mapItemRow) };
 
     res.status(201).json({
       success: true,
@@ -301,6 +312,9 @@ const createFactura = asyncHandler(async (req, res) => {
     await connection.rollback();
     throw error;
   } finally {
+    if (lockNumeracion) {
+      await liberarLockNumeracion(connection);
+    }
     connection.release();
   }
 
@@ -409,7 +423,8 @@ const updateEstadoFactura = asyncHandler(async (req, res) => {
 
 /**
  * DELETE /api/facturas/:id
- * Elimina fisicamente la factura y sus items (solo si esta pendiente).
+ * Elimina fisicamente la factura y sus items (solo si esta pendiente),
+ * restituyendo el stock descontado a los productos.
  * Se conserva la auditoria de la operacion.
  */
 const deleteFactura = asyncHandler(async (req, res) => {
@@ -426,12 +441,36 @@ const deleteFactura = asyncHandler(async (req, res) => {
     throw createHttpError(409, 'No puede eliminar una factura ya enviada a la DIAN.');
   }
 
-  const [result] = await pool.query(
-    'DELETE FROM facturas WHERE id = ?',
-    [req.params.id]
-  );
-  if (result.affectedRows === 0) {
-    throw createHttpError(404, 'Factura no encontrada.');
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // Restituir el stock de los productos vendidos en la factura
+    const [items] = await connection.query(
+      'SELECT producto_id, cantidad FROM factura_items WHERE factura_id = ?',
+      [req.params.id]
+    );
+    for (const item of items) {
+      await connection.query(
+        'UPDATE productos SET stock = stock + ? WHERE id = ?',
+        [item.cantidad, item.producto_id]
+      );
+    }
+
+    const [result] = await connection.query(
+      'DELETE FROM facturas WHERE id = ?',
+      [req.params.id]
+    );
+    if (result.affectedRows === 0) {
+      throw createHttpError(404, 'Factura no encontrada.');
+    }
+
+    await connection.commit();
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
   }
 
   await registrarAuditoria(req, `DELETE factura ${factura.numero}`, 'facturas', req.params.id);

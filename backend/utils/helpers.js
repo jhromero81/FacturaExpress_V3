@@ -19,21 +19,56 @@ function calcularIVA(base) {
   return Math.round(base * IVA_RATE);
 }
 
-/**
- * Genera el numero secuencial de una factura con el formato
- * FAC-YYYYMM-XXXXX, donde XXXXX es la siguiente posicion de la
- * secuencia dentro del mes actual. Si no hay facturas en el mes,
- * la secuencia inicia en 1.
- * @returns {Promise<string>} Numero de factura generado.
- */
-async function generateInvoiceNumber() {
+/** Nombre del advisory lock usado para serializar la numeracion. */
+const LOCK_NUMERACION = 'facturaexpress_secuencia_facturas';
+
+/** Prefijo del numero de factura del mes actual (FAC-YYYYMM-). */
+function prefijoFacturaMes() {
   const ahora = new Date();
   const year = ahora.getFullYear();
   const month = String(ahora.getMonth() + 1).padStart(2, '0');
-  const prefix = `FAC-${year}${month}-`;
+  return `FAC-${year}${month}-`;
+}
+
+/**
+ * Obtiene el advisory lock de numeracion sobre una conexion concreta.
+ * El lock se mantiene hasta hacer RELEASE_LOCK() o cerrar la conexion,
+ * por lo que puede abarcar toda una transaccion (getConnection).
+ * @param {object} connection - Conexion de mysql2 sobre la que se ejecuta.
+ * @returns {Promise<boolean>} true si el lock fue adquirido.
+ */
+async function adquirirLockNumeracion(connection) {
+  const [rows] = await connection.query('SELECT GET_LOCK(?, 10) AS ok', [LOCK_NUMERACION]);
+  return Boolean(rows && rows[0] && Number(rows[0].ok) === 1);
+}
+
+/**
+ * Libera el advisory lock de numeracion. Nunca lanza errores para no
+ * interrumpir la operacion principal (el lock se libera solo al cerrar
+ * la conexion).
+ * @param {object} connection - Conexion sobre la que se libera el lock.
+ * @returns {Promise<void>}
+ */
+async function liberarLockNumeracion(connection) {
+  try {
+    await connection.query('SELECT RELEASE_LOCK(?)', [LOCK_NUMERACION]);
+  } catch {
+    /* el lock caduca con la conexion */
+  }
+}
+
+/**
+ * Calcula el siguiente numero de factura del mes actual sobre una
+ * conexion concreta (debe ejecutarse bajo el lock de numeracion para
+ * garantizar la exclusividad).
+ * @param {object} connection - Conexion de mysql2.
+ * @returns {Promise<string>} Numero generado.
+ */
+async function calcularSiguienteNumero(connection) {
+  const prefix = prefijoFacturaMes();
 
   // Contar facturas emitidas en el mes actual
-  const [rows] = await pool.query(
+  const [rows] = await connection.query(
     `SELECT COUNT(*) AS total
        FROM facturas
       WHERE numero LIKE ?`,
@@ -42,6 +77,31 @@ async function generateInvoiceNumber() {
 
   const secuencia = Number(rows[0].total) + 1;
   return `${prefix}${String(secuencia).padStart(5, '0')}`;
+}
+
+/**
+ * Genera el numero secuencial de una factura con el formato
+ * FAC-YYYYMM-XXXXX, donde XXXXX es la siguiente posicion de la
+ * secuencia dentro del mes actual. Si no hay facturas en el mes,
+ * la secuencia inicia en 1.
+ *
+ * Usa un advisory lock de MySQL para evitar que dos ventas concurrentes
+ * generen el mismo numero. Cuando se pasa una conexion de transaccion
+ * (controllers), la numeracion queda protegida hasta el commit.
+ *
+ * @param {object} [connection=pool] - Conexion sobre la que contar y bloquear.
+ * @returns {Promise<string>} Numero de factura generado.
+ */
+async function generateInvoiceNumber(connection = pool) {
+  const ok = await adquirirLockNumeracion(connection);
+  if (!ok) {
+    throw new Error('No fue posible obtener el bloqueo de numeracion de facturas.');
+  }
+  try {
+    return await calcularSiguienteNumero(connection);
+  } finally {
+    await liberarLockNumeracion(connection);
+  }
 }
 
 /**
@@ -178,6 +238,9 @@ module.exports = {
   IVA_RATE,
   calcularIVA,
   generateInvoiceNumber,
+  adquirirLockNumeracion,
+  liberarLockNumeracion,
+  calcularSiguienteNumero,
   isValidPositiveInt,
   isRequiredString,
   escapeXML,
