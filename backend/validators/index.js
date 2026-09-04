@@ -250,6 +250,45 @@ const toggleActivoValidator = [
     .withMessage('El campo activo debe ser true o false.'),
 ];
 
+// ============================================================
+// Configuracion (solo admin)
+// ============================================================
+
+const configuracionEmpresaValidator = [
+  body('nit')
+    .optional({ values: 'falsy' })
+    .trim()
+    .isLength({ max: 20 })
+    .withMessage('El NIT no puede superar 20 caracteres.'),
+  body('razonSocial')
+    .optional({ values: 'falsy' })
+    .trim()
+    .isLength({ max: 150 })
+    .withMessage('La razon social no puede superar 150 caracteres.'),
+  body('emailFacturacion')
+    .optional({ values: 'falsy' })
+    .isEmail()
+    .withMessage('El correo de facturacion no es valido.')
+    .isLength({ max: 150 })
+    .withMessage('El correo de facturacion no puede superar 150 caracteres.'),
+  body('telefono')
+    .optional({ values: 'falsy' })
+    .isLength({ max: 20 })
+    .withMessage('El telefono no puede superar 20 caracteres.'),
+];
+
+const configuracionFiscalValidator = [
+  body('resolucionDIAN')
+    .optional({ values: 'falsy' })
+    .trim()
+    .isLength({ max: 50 })
+    .withMessage('La resolucion DIAN no puede superar 50 caracteres.'),
+  body('fechaExpiracionCert')
+    .optional({ values: 'falsy' })
+    .isDate()
+    .withMessage('La fecha de expiracion debe ser una fecha valida (YYYY-MM-DD).'),
+];
+
 module.exports = {
   loginValidator,
   clienteBaseValidator,
@@ -263,4 +302,6 @@ module.exports = {
   crearUsuarioValidator,
   actualizarUsuarioValidator,
   toggleActivoValidator,
+  configuracionEmpresaValidator,
+  configuracionFiscalValidator,
 };

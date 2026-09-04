@@ -18,6 +18,7 @@ const {
   calcularSiguienteNumero,
   isValidPositiveInt,
   isRequiredString,
+  clampInt,
   escapeXML,
   escapeCSV,
   mapFacturaRow,
@@ -52,6 +53,10 @@ const CAMPOS_FACTURA = `f.id, f.numero, f.fecha, f.cliente_id, f.cliente_identif
  */
 const listFacturas = asyncHandler(async (req, res) => {
   const { q = '', estado = '', pagina = 1, limite = 20 } = req.query;
+  // Paginacion acotada: valores no numericos caen a los default y nunca
+  // se permite un desplazamiento/limite invalido (evita errores 500).
+  const paginaEntera = clampInt(pagina, 1, 100000, 1);
+  const limiteEntero = clampInt(limite, 1, 200, 20);
 
   const condiciones = [];
   const parametros = [];
@@ -81,7 +86,7 @@ const listFacturas = asyncHandler(async (req, res) => {
        ${where}
       ORDER BY f.fecha DESC
       LIMIT ? OFFSET ?`,
-    [...parametros, Number(limite), (Number(pagina) - 1) * Number(limite)]
+    [...parametros, limiteEntero, (paginaEntera - 1) * limiteEntero]
   );
 
   const total = Number(countRows[0].total);
@@ -89,7 +94,7 @@ const listFacturas = asyncHandler(async (req, res) => {
   res.json({
     success: true,
     total,
-    totalPaginas: Math.ceil(total / Number(limite)),
+    totalPaginas: Math.ceil(total / limiteEntero),
     facturas: rows.map(mapFacturaRow),
   });
 });
@@ -168,6 +173,11 @@ const createFactura = asyncHandler(async (req, res) => {
   const ids = items.map((i) => Number(i.productoId)).filter((id) => isValidPositiveInt(id));
   if (ids.length !== items.length) {
     throw createHttpError(400, 'Cada item debe incluir un productoId valido.');
+  }
+  // Evitar el mismo producto dos veces en una venta: descontaria el stock
+  // dos veces y dejaria una factura inconsistente ante la DIAN.
+  if (new Set(ids).size !== ids.length) {
+    throw createHttpError(400, 'No puede incluir el mismo producto dos veces en la venta.');
   }
 
   const placeholders = ids.map(() => '?').join(', ');
@@ -263,28 +273,43 @@ const createFactura = asyncHandler(async (req, res) => {
 
     facturaId = result.insertId;
 
-    // Insertar items y descontar stock de cada producto
+    // Insertar todos los items en un solo INSERT de multiples filas
+    // (reduce viajes a la base de datos) y descontar el stock de cada
+    // producto con una actualizacion CONDICIONAL (stock >= cantidad):
+    // dos ventas concurrentes no pueden dejar stock negativo.
+    const filasItems = [];
+    const parametrosItems = [];
     for (const linea of lineas) {
-      await connection.query(
-        `INSERT INTO factura_items
-          (factura_id, producto_id, codigo, nombre, cantidad, precio_unitario, iva, subtotal)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          facturaId,
-          linea.productoId,
-          linea.codigo,
-          linea.nombre,
-          linea.cantidad,
-          linea.precioUnitario,
-          linea.iva,
-          linea.subtotal,
-        ]
+      filasItems.push('(?, ?, ?, ?, ?, ?, ?, ?)');
+      parametrosItems.push(
+        facturaId,
+        linea.productoId,
+        linea.codigo,
+        linea.nombre,
+        linea.cantidad,
+        linea.precioUnitario,
+        linea.iva,
+        linea.subtotal
       );
+    }
+    await connection.query(
+      `INSERT INTO factura_items
+        (factura_id, producto_id, codigo, nombre, cantidad, precio_unitario, iva, subtotal)
+       VALUES ${filasItems.join(', ')}`,
+      parametrosItems
+    );
 
-      await connection.query(
-        'UPDATE productos SET stock = stock - ? WHERE id = ?',
-        [linea.cantidad, linea.productoId]
+    for (const linea of lineas) {
+      const [stockRes] = await connection.query(
+        'UPDATE productos SET stock = stock - ? WHERE id = ? AND activo = 1 AND stock >= ?',
+        [linea.cantidad, linea.productoId, linea.cantidad]
       );
+      if (stockRes.affectedRows === 0) {
+        throw createHttpError(
+          409,
+          `Stock insuficiente de ${linea.nombre}: no quedan suficientes unidades.`
+        );
+      }
     }
 
     await connection.commit();
@@ -308,6 +333,16 @@ const createFactura = asyncHandler(async (req, res) => {
       message: `Venta finalizada: ${numero}`,
       factura,
     });
+
+    // ---- Procesos post-venta en segundo plano ----
+    // La respuesta ya se envio: la generacion de PDF y el envio de correo
+    // son trabajo pesado que no debe bloquear al resto de peticiones.
+    setImmediate(() => {
+      procesarPostVenta({ factura, cliente, numero, facturaId, req }).catch((error) => {
+        // Nunca romper la respuesta principal por los procesos post-venta
+        registrarError(`Error en procesos post-venta de la factura ${numero}: ${error.message}`, 'dian', facturaId);
+      });
+    });
   } catch (error) {
     await connection.rollback();
     throw error;
@@ -317,53 +352,55 @@ const createFactura = asyncHandler(async (req, res) => {
     }
     connection.release();
   }
-
-  // ---- Procesos post-venta (no bloquean la respuesta) ----
-  try {
-    const [empresas] = await pool.query(
-      'SELECT nit, razon_social, telefono, email_facturacion, resolucion_dian FROM empresa WHERE id = 1'
-    );
-    const empresa = empresas[0] || null;
-
-    // Generar PDF y XML en segundo plano
-    let pdfBytes = null;
-    if (empresa) {
-      pdfBytes = await pdfService
-        .generarPdfFactura({ factura: { ...factura, items: undefined }, items: factura.items, empresa })
-        .catch((err) => {
-          registrarError(`No se pudo generar el PDF de la factura ${numero}: ${err.message}`, 'otro', facturaId);
-          return null;
-        });
-    }
-
-    // Enviar por correo si esta configurado y el cliente tiene email
-    if (pdfBytes && cliente.email && emailService.correoConfigurado()) {
-      const enviado = await emailService
-        .enviarFactura({
-          destino: cliente.email,
-          asunto: `Factura Electronica ${factura.numero}`,
-          cuerpoHtml: `<p>Hola <strong>${factura.cliente.nombre}</strong>,</p>
-            <p>Adjuntamos su factura electronica <strong>${factura.numero}</strong> por un valor de
-            <strong>$${Number(factura.total).toLocaleString('es-CO')}</strong>.</p>
-            <p>Gracias por su compra.</p>`,
-          pdfBytes,
-          nombreAdjunto: `${factura.numero}.pdf`,
-        })
-        .catch((err) => {
-          registrarError(`Fallo el envio de correo de la factura ${numero}: ${err.message}`, 'correo', facturaId);
-          return false;
-        });
-      if (enviado) {
-        await pool.query('UPDATE facturas SET correo_enviado = 1 WHERE id = ?', [facturaId]);
-      }
-    }
-
-    await registrarAuditoria(req, `INSERT factura ${numero}`, 'facturas', facturaId);
-  } catch (error) {
-    // Nunca romper la respuesta principal por los procesos post-venta
-    registrarError(`Error en procesos post-venta de la factura ${numero}: ${error.message}`, 'dian', facturaId);
-  }
 });
+
+/**
+ * Ejecuta los procesos posteriores a una venta confirmada sin bloquear
+ * la respuesta HTTP: generacion del PDF, envio del correo al cliente y
+ * auditoria. Los fallos se registran en errores_sistema y jamas afectan
+ * la factura ya persistida.
+ * @param {object} contexto - { factura, cliente, numero, facturaId, req }.
+ */
+async function procesarPostVenta({ factura, cliente, numero, facturaId, req }) {
+  const [empresas] = await pool.query(
+    'SELECT nit, razon_social, telefono, email_facturacion, resolucion_dian FROM empresa WHERE id = 1'
+  );
+  const empresa = empresas[0] || null;
+
+  let pdfBytes = null;
+  if (empresa) {
+    pdfBytes = await pdfService
+      .generarPdfFactura({ factura: { ...factura, items: undefined }, items: factura.items, empresa })
+      .catch((err) => {
+        registrarError(`No se pudo generar el PDF de la factura ${numero}: ${err.message}`, 'otro', facturaId);
+        return null;
+      });
+  }
+
+  // Enviar por correo si esta configurado y el cliente tiene email
+  if (pdfBytes && cliente.email && emailService.correoConfigurado()) {
+    const enviado = await emailService
+      .enviarFactura({
+        destino: cliente.email,
+        asunto: `Factura Electronica ${factura.numero}`,
+        cuerpoHtml: `<p>Hola <strong>${factura.cliente.nombre}</strong>,</p>
+          <p>Adjuntamos su factura electronica <strong>${factura.numero}</strong> por un valor de
+          <strong>$${Number(factura.total).toLocaleString('es-CO')}</strong>.</p>
+          <p>Gracias por su compra.</p>`,
+        pdfBytes,
+        nombreAdjunto: `${factura.numero}.pdf`,
+      })
+      .catch((err) => {
+        registrarError(`Fallo el envio de correo de la factura ${numero}: ${err.message}`, 'correo', facturaId);
+        return false;
+      });
+    if (enviado) {
+      await pool.query('UPDATE facturas SET correo_enviado = 1 WHERE id = ?', [facturaId]);
+    }
+  }
+
+  await registrarAuditoria(req, `INSERT factura ${numero}`, 'facturas', facturaId);
+}
 
 /**
  * PUT /api/facturas/:id/estado

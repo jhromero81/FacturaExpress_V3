@@ -105,6 +105,23 @@ async function generateInvoiceNumber(connection = pool) {
 }
 
 /**
+ * Lee y acota un parametro de paginacion (pagina o limite) recibido por
+ * query string. Evita valores NaN, negativos o desbordados que volverian
+ * inestable una consulta (LIMIT/OFFSET invalido => error 500) o que un
+ * cliente pidiera resultados ilimitados.
+ * @param {string|number} valor - Valor crudo del query string.
+ * @param {number} minimo - Valor minimo aceptado (incluido).
+ * @param {number} maximo - Valor maximo aceptado (incluido).
+ * @param {number} defecto - Valor usado cuando no es numerico.
+ * @returns {number} Entero acotado.
+ */
+function clampInt(valor, minimo, maximo, defecto) {
+  const numero = Number(valor);
+  if (!Number.isFinite(numero)) return defecto;
+  return Math.min(Math.max(Math.trunc(numero), minimo), maximo);
+}
+
+/**
  * Verifica que un valor sea un entero positivo.
  * @param {*} value - Valor a comprobar.
  * @returns {boolean} true si es un entero mayor que cero.
@@ -241,6 +258,7 @@ module.exports = {
   adquirirLockNumeracion,
   liberarLockNumeracion,
   calcularSiguienteNumero,
+  clampInt,
   isValidPositiveInt,
   isRequiredString,
   escapeXML,

@@ -168,6 +168,12 @@ const updateUsuario = asyncHandler(async (req, res) => {
 
   const rolFinal = rol && ROLES_VALIDOS.includes(rol) ? rol : actual[0].rol;
 
+  // No permitir que un admin cambie su propio rol (evita degradarse y
+  // perder el acceso al modulo de administracion).
+  if (Number(req.params.id) === Number(req.usuario.id) && rol && rol !== actual[0].rol) {
+    throw createHttpError(400, 'No puede cambiar el rol de su propia cuenta.');
+  }
+
   await pool.query(
     `UPDATE usuarios
         SET nit    = COALESCE(?, nit),
@@ -207,12 +213,19 @@ const updateUsuario = asyncHandler(async (req, res) => {
  * Activa o desactiva un usuario. Body: { activo: boolean }.
  */
 const toggleActivo = asyncHandler(async (req, res) => {
+  const id = Number(req.params.id);
+
+  // No permitir desactivar la propia cuenta (evita encerrar al admin)
+  if (id === Number(req.usuario.id)) {
+    throw createHttpError(400, 'No puede activar o desactivar su propia cuenta.');
+  }
+
   const { activo } = req.body || {};
   const activoFinal = Boolean(activo) ? 1 : 0;
 
   const [result] = await pool.query(
     'UPDATE usuarios SET activo = ? WHERE id = ?',
-    [activoFinal, req.params.id]
+    [activoFinal, id]
   );
   if (result.affectedRows === 0) {
     throw createHttpError(404, 'Usuario no encontrado.');

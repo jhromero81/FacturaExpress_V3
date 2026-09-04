@@ -8,6 +8,7 @@
 const { pool } = require('../config/db');
 const { asyncHandler, createHttpError } = require('../middleware/errorHandler');
 const { registrarAuditoria } = require('../utils/auditoria');
+const { clampInt } = require('../utils/helpers');
 const pdfService = require('../services/pdf.service');
 
 /** Meta mensual de ventas en COP (consistente con el frontend) */
@@ -30,39 +31,25 @@ const PERIODOS = {
 const getKPIs = asyncHandler(async (req, res) => {
   const hoy = new Date().toISOString().slice(0, 10);
 
-  // Ventas y facturas del dia actual
-  const [hoyRows] = await pool.query(
-    `SELECT COUNT(*) AS cantidad, COALESCE(SUM(total), 0) AS ventas
-       FROM facturas
-      WHERE DATE(fecha) = ?`,
-    [hoy]
+  // Todos los indicadores se calculan en una sola consulta (antes eran
+  // cinco viajes a la base) para responder el dashboard con menor latencia.
+  const [rows] = await pool.query(
+    `SELECT
+       (SELECT COUNT(*) FROM facturas WHERE DATE(fecha) = ?) AS facturas_hoy,
+       (SELECT COALESCE(SUM(total), 0) FROM facturas WHERE DATE(fecha) = ?) AS ventas_hoy,
+       (SELECT COUNT(*) FROM facturas WHERE estado = 'pendiente') AS pendientes,
+       (SELECT COUNT(*) FROM facturas WHERE estado <> 'rechazada') AS total_facturas,
+       (SELECT COALESCE(SUM(total), 0) FROM facturas WHERE estado <> 'rechazada') AS ventas_totales,
+       (SELECT COUNT(*) FROM clientes WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)) AS clientes_nuevos,
+       (SELECT COALESCE(SUM(cantidad), 0) FROM factura_items) AS productos_vendidos`,
+    [hoy, hoy]
   );
 
-  // Facturas pendientes ante la DIAN
-  const [pendientesRows] = await pool.query(
-    "SELECT COUNT(*) AS total FROM facturas WHERE estado = 'pendiente'"
-  );
-
-  // Ventas totales y cantidad de facturas
-  const [totalesRows] = await pool.query(
-    `SELECT COUNT(*) AS total_facturas, COALESCE(SUM(total), 0) AS ventas_totales
-       FROM facturas WHERE estado <> 'rechazada'`
-  );
-
-  // Clientes registrados en los ultimos 30 dias
-  const [nuevosRows] = await pool.query(
-    'SELECT COUNT(*) AS total FROM clientes WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)'
-  );
-
-  // Productos vendidos (suma de cantidades en items)
-  const [productosRows] = await pool.query(
-    'SELECT COALESCE(SUM(cantidad), 0) AS total FROM factura_items'
-  );
-
-  const facturasHoy = Number(hoyRows[0].cantidad);
-  const ventasDia = Number(hoyRows[0].ventas);
-  const totalFacturas = Number(totalesRows[0].total_facturas);
-  const ventasMes = Number(totalesRows[0].ventas_totales);
+  const k = rows[0];
+  const facturasHoy = Number(k.facturas_hoy);
+  const ventasDia = Number(k.ventas_hoy);
+  const totalFacturas = Number(k.total_facturas);
+  const ventasMes = Number(k.ventas_totales);
 
   res.json({
     success: true,
@@ -70,11 +57,11 @@ const getKPIs = asyncHandler(async (req, res) => {
       ventasDia,
       facturasEmitidasHoy: facturasHoy,
       facturasEmitidas: totalFacturas,
-      pendientesDIAN: Number(pendientesRows[0].total),
+      pendientesDIAN: Number(k.pendientes),
       ticketPromedio: facturasHoy > 0 ? Math.round(ventasDia / facturasHoy) : 0,
       ventasMes,
-      clientesNuevos: Number(nuevosRows[0].total),
-      productosVendidos: Number(productosRows[0].total),
+      clientesNuevos: Number(k.clientes_nuevos),
+      productosVendidos: Number(k.productos_vendidos),
       metaVentasMensual: META_VENTAS_MENSUAL,
       avanceMeta: Math.min(Math.round((ventasMes / META_VENTAS_MENSUAL) * 100), 100),
     },
@@ -176,7 +163,7 @@ const getVentasPeriodo = asyncHandler(async (req, res) => {
  * items de todas las facturas.
  */
 const getProductosTop = asyncHandler(async (req, res) => {
-  const limite = Math.min(Number(req.query.limite || 5), 20);
+  const limite = clampInt(req.query.limite, 1, 20, 5);
 
   const [rows] = await pool.query(
     `SELECT fi.producto_id, fi.codigo, fi.nombre,
@@ -209,7 +196,7 @@ const getProductosTop = asyncHandler(async (req, res) => {
  * recientes del Dashboard.
  */
 const getUltimasTransacciones = asyncHandler(async (req, res) => {
-  const limite = Math.min(Number(req.query.limite || 4), 20);
+  const limite = clampInt(req.query.limite, 1, 20, 4);
 
   const [rows] = await pool.query(
     `SELECT id, numero, fecha, cliente_nombre, total, estado

@@ -8,7 +8,7 @@
 
 const { pool } = require('../config/db');
 const { asyncHandler, createHttpError } = require('../middleware/errorHandler');
-const { isRequiredString, mapClienteRow } = require('../utils/helpers');
+const { isRequiredString, mapClienteRow, clampInt } = require('../utils/helpers');
 
 /**
  * GET /api/clientes
@@ -20,6 +20,10 @@ const { isRequiredString, mapClienteRow } = require('../utils/helpers');
 const listClientes = asyncHandler(async (req, res) => {
   const { q = '', pagina = 1, limite = 50 } = req.query;
   const termino = `%${q.trim()}%`;
+  // Paginacion acotada: nunca crece sin limite y los valores no numericos
+  // caen al valor por defecto (evita LIMIT/OFFSET invalido => error 500).
+  const paginaEntera = clampInt(pagina, 1, 100000, 1);
+  const limiteEntero = clampInt(limite, 1, 200, 50);
 
   const [rows] = await pool.query(
     `SELECT id, identificacion, nombre, email, telefono
@@ -28,7 +32,7 @@ const listClientes = asyncHandler(async (req, res) => {
         AND (nombre LIKE ? OR identificacion LIKE ? OR email LIKE ?)
       ORDER BY nombre ASC
       LIMIT ? OFFSET ?`,
-    [termino, termino, termino, Number(limite), (Number(pagina) - 1) * Number(limite)]
+    [termino, termino, termino, limiteEntero, (paginaEntera - 1) * limiteEntero]
   );
 
   const [countRows] = await pool.query(
@@ -44,7 +48,7 @@ const listClientes = asyncHandler(async (req, res) => {
   res.json({
     success: true,
     total,
-    totalPaginas: Math.ceil(total / Number(limite)),
+    totalPaginas: Math.ceil(total / limiteEntero),
     clientes: rows.map(mapClienteRow),
   });
 });

@@ -156,6 +156,17 @@ async function restaurarBackup(archivo) {
   }
 
   const contenido = fs.readFileSync(ruta, 'utf8');
+
+  // Solo se restauran volcados generados por la aplicacion: la cabecera
+  // identifica el formato y evita ejecutar SQL arbitrario por error o por
+  // un archivo corrupto.
+  const MARCA = '-- FacturaExpress - Respaldo de la base de datos';
+  if (!contenido.includes(MARCA)) {
+    const error = new Error('El archivo no es un respaldo valido de FacturaExpress.');
+    error.statusCode = 400;
+    throw error;
+  }
+
   const connection = await mysql.createConnection({
     host: process.env.DB_HOST || 'localhost',
     port: Number(process.env.DB_PORT || 3306),

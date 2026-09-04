@@ -7,7 +7,7 @@
 
 const { pool } = require('../config/db');
 const { asyncHandler, createHttpError } = require('../middleware/errorHandler');
-const { isRequiredString, isValidPositiveInt, mapProductoRow } = require('../utils/helpers');
+const { isRequiredString, isValidPositiveInt, mapProductoRow, clampInt } = require('../utils/helpers');
 
 /** Tasa de IVA por defecto para nuevos productos */
 const IVA_DEFAULT = 0.19;
@@ -22,6 +22,8 @@ const IVA_DEFAULT = 0.19;
 const listProductos = asyncHandler(async (req, res) => {
   const { q = '', pagina = 1, limite = 50 } = req.query;
   const termino = `%${q.trim()}%`;
+  const paginaEntera = clampInt(pagina, 1, 100000, 1);
+  const limiteEntero = clampInt(limite, 1, 200, 50);
 
   const [rows] = await pool.query(
     `SELECT id, codigo, nombre, precio, iva, stock
@@ -30,7 +32,7 @@ const listProductos = asyncHandler(async (req, res) => {
         AND (nombre LIKE ? OR codigo LIKE ?)
       ORDER BY nombre ASC
       LIMIT ? OFFSET ?`,
-    [termino, termino, Number(limite), (Number(pagina) - 1) * Number(limite)]
+    [termino, termino, limiteEntero, (paginaEntera - 1) * limiteEntero]
   );
 
   const [countRows] = await pool.query(
@@ -46,7 +48,7 @@ const listProductos = asyncHandler(async (req, res) => {
   res.json({
     success: true,
     total,
-    totalPaginas: Math.ceil(total / Number(limite)),
+    totalPaginas: Math.ceil(total / limiteEntero),
     productos: rows.map(mapProductoRow),
   });
 });
