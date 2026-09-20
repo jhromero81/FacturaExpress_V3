@@ -5,7 +5,7 @@
  * (PDF/XML), cambio de estado y eliminacion de facturas pendientes.
  */
 
-import { Component, inject } from '@angular/core';
+import { ChangeDetectorRef, Component, inject } from '@angular/core';
 import { Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { ApiService, mensajeError } from '../../core/api.service';
@@ -47,6 +47,16 @@ export class FacturasComponent {
   private api = inject(ApiService);
   private router = inject(Router);
   private toast = inject(ToastService);
+
+  /**
+   * Necesario para marcar la vista tras las respuestas HTTP. En Angular 22
+   * el ciclo de deteccion solo revisa las vistas marcadas como sucias y una
+   * mutacion de propiedades planas dentro de un callback asincrono no marca
+   * la vista, de modo que la tabla se quedaba en "Cargando facturas..." con
+   * los datos ya presentes en memoria. Las senales no lo necesitan porque
+   * marcan la vista por si mismas; markForCheck() ademas programa el ciclo.
+   */
+  private cdr = inject(ChangeDetectorRef);
 
   searchTerm = '';
   currentPage = 1;
@@ -104,10 +114,12 @@ export class FacturasComponent {
           return;
         }
         this.loading = false;
+        this.cdr.markForCheck();
       },
       error: (err) => {
         this.toast.mostrar(mensajeError(err), 'error');
         this.loading = false;
+        this.cdr.markForCheck();
       },
     });
   }
@@ -148,11 +160,13 @@ export class FacturasComponent {
           if (solicitud !== this.detalleSolicitado) return; // respuesta obsoleta
           this.selected = res.factura;
           this.detailLoading = false;
+          this.cdr.markForCheck();
         },
         error: (err) => {
           if (solicitud !== this.detalleSolicitado) return;
           this.toast.mostrar(mensajeError(err), 'error');
           this.detailLoading = false;
+          this.cdr.markForCheck();
         },
       });
   }

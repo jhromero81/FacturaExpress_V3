@@ -5,7 +5,7 @@
  * cantidad y panel de pago oscuro con descuento e IVA.
  */
 
-import { Component, OnDestroy, inject } from '@angular/core';
+import { ChangeDetectorRef, Component, OnDestroy, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { ApiService, mensajeError } from '../../core/api.service';
@@ -35,6 +35,15 @@ export class NuevaVentaComponent implements OnDestroy {
   private api = inject(ApiService);
   private router = inject(Router);
   private toast = inject(ToastService);
+
+  /**
+   * Marca la vista tras las respuestas HTTP. En Angular 22 el ciclo de
+   * deteccion solo revisa las vistas marcadas como sucias: mutar propiedades
+   * planas en un callback asincrono no marca la vista, de modo que el
+   * catalogo se quedaba en "Cargando..." con los datos ya en memoria.
+   * markForCheck() marca la vista y ademas programa el ciclo de deteccion.
+   */
+  private cdr = inject(ChangeDetectorRef);
 
   productos: Producto[] = [];
   clientes: Cliente[] = [];
@@ -100,6 +109,9 @@ export class NuevaVentaComponent implements OnDestroy {
         error: (err) => {
           this.toast.mostrar(mensajeError(err), 'error');
           this.falloCatalogo = true;
+          // RxJS no invoca complete despues de un error: sin esta llamada el
+          // indicador de carga del catalogo se quedaba activo indefinidamente.
+          this.cerrarCargarCatalogo();
         },
         complete: () => this.cerrarCargarCatalogo(),
       });
@@ -118,6 +130,9 @@ export class NuevaVentaComponent implements OnDestroy {
         error: (err) => {
           this.toast.mostrar(mensajeError(err), 'error');
           this.falloCatalogo = true;
+          // Ver nota del catalogo de clientes: complete no se ejecuta tras
+          // un error y el indicador de carga quedaba activo para siempre.
+          this.cerrarCargarCatalogo();
         },
         complete: () => this.cerrarCargarCatalogo(),
       });
@@ -137,6 +152,7 @@ export class NuevaVentaComponent implements OnDestroy {
     if (this.pendienteCatalogo > 0) return;
     this.errorCatalogo = this.falloCatalogo;
     this.loading = false;
+    this.cdr.markForCheck();
   }
 
   /** Restaura el cliente preseleccionado desde el modulo de clientes (un solo uso). */
@@ -246,6 +262,7 @@ export class NuevaVentaComponent implements OnDestroy {
       .subscribe({
         next: (res) => {
           this.productos = res.productos ?? [];
+          this.cdr.markForCheck();
         },
         // El refresco es best-effort: si falla, la venta ya esta registrada.
         error: () => undefined,
@@ -278,6 +295,7 @@ export class NuevaVentaComponent implements OnDestroy {
           this.toast.mostrar(`Venta finalizada: ${res.factura.numero}`, 'success');
           this.nuevaVenta();
           this.refrescarStock();
+          this.cdr.markForCheck();
 
           if (this.temporizadorAviso !== null) clearTimeout(this.temporizadorAviso);
           this.temporizadorAviso = setTimeout(() => {
@@ -288,7 +306,10 @@ export class NuevaVentaComponent implements OnDestroy {
           }, 500);
         },
         error: (err) => this.toast.mostrar(mensajeError(err), 'error'),
-        complete: () => (this.isFinalizing = false),
+        complete: () => {
+          this.isFinalizing = false;
+          this.cdr.markForCheck();
+        },
       });
   }
 

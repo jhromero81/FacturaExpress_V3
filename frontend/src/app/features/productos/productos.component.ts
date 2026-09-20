@@ -4,7 +4,7 @@
  * validaciones y ajuste de stock (suma/resta) via modal.
  */
 
-import { Component, OnDestroy, inject } from '@angular/core';
+import { ChangeDetectorRef, Component, OnDestroy, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiService, mensajeError } from '../../core/api.service';
 import { ToastService } from '../../core/toast.service';
@@ -42,6 +42,15 @@ export class ProductosComponent implements OnDestroy {
 
   private api = inject(ApiService);
   private toast = inject(ToastService);
+
+  /**
+   * Marca la vista tras las respuestas HTTP. En Angular 22 el ciclo de
+   * deteccion solo revisa las vistas marcadas como sucias: mutar propiedades
+   * planas en un callback asincrono no marca la vista y la tabla se quedaba
+   * en "Cargando..." con los datos ya en memoria. markForCheck() marca la
+   * vista y ademas programa el ciclo de deteccion.
+   */
+  private cdr = inject(ChangeDetectorRef);
 
   productos: Producto[] = [];
   loading = true;
@@ -109,10 +118,12 @@ export class ProductosComponent implements OnDestroy {
             return;
           }
           this.loading = false;
+          this.cdr.markForCheck();
         },
         error: (err) => {
           this.toast.mostrar(mensajeError(err), 'error');
           this.loading = false;
+          this.cdr.markForCheck();
         },
       });
   }
@@ -234,6 +245,7 @@ export class ProductosComponent implements OnDestroy {
           this.productos = this.productos.map((p) => (p.id === objetivo.id ? res.producto : p));
           this.cerrarStock();
           this.toast.mostrar(`Stock de "${objetivo.nombre}" ajustado`, 'success');
+          this.cdr.markForCheck();
         },
         error: (err) => this.toast.mostrar(mensajeError(err), 'error'),
       });
