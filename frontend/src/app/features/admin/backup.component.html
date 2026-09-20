@@ -1,0 +1,94 @@
+<div class="backup-page">
+  <!-- Panel de accion principal -->
+  <div class="backup-hero">
+    <div class="backup-hero-info">
+      <span class="material-icons backup-icon">backup</span>
+      <div>
+        <h3>Respaldo de Base de Datos</h3>
+        <p>
+          Genere una copia de seguridad SQL completa del sistema. Los respaldos
+          incluyen facturas, clientes, productos y configuracion.
+        </p>
+      </div>
+    </div>
+    <button type="button" class="btn-teal" (click)="handleCrear()" [disabled]="isWorking()">
+      <span class="material-icons">save</span>
+      {{ isWorking() ? 'CREANDO RESPALDO...' : 'CREAR RESPALDO' }}
+    </button>
+  </div>
+
+  <!-- Tabla de respaldos -->
+  <div class="content-card">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Archivo</th>
+          <th>Tamano</th>
+          <th>Fecha</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        @if (loading()) {
+          <tr>
+            <td colspan="4" class="empty-table">
+              <span class="material-icons">sync</span>
+              <p>Cargando respaldos...</p>
+            </td>
+          </tr>
+        } @else if (backups.length === 0) {
+          <tr>
+            <td colspan="4" class="empty-table">
+              <span class="material-icons">cloud_off</span>
+              <p>No hay respaldos creados. Cree el primer respaldo.</p>
+            </td>
+          </tr>
+        } @else {
+          @for (backup of backups; track backup.archivo) {
+            <tr>
+              <td class="font-mono">{{ backup.archivo }}</td>
+              <td class="font-mono">{{ tamano(backup.tamano) }}</td>
+              <td>{{ fecha(backup.fecha) }}</td>
+              <td>
+                <div class="backup-actions">
+                  <button
+                    type="button"
+                    class="action-btn"
+                    (click)="handleDescargar(backup)"
+                    title="Descargar"
+                    [disabled]="isWorking()"
+                  >
+                    <span class="material-icons">download</span>
+                  </button>
+                  <button
+                    type="button"
+                    class="action-btn restore"
+                    (click)="handleRestaurar(backup)"
+                    title="Restaurar"
+                    [disabled]="isWorking()"
+                  >
+                    <span class="material-icons">restore</span>
+                  </button>
+                  <button
+                    type="button"
+                    class="action-btn danger"
+                    (click)="handleEliminar(backup)"
+                    title="Eliminar"
+                    [disabled]="isWorking()"
+                  >
+                    <span class="material-icons">delete</span>
+                  </button>
+                </div>
+              </td>
+            </tr>
+          }
+        }
+      </tbody>
+    </table>
+  </div>
+
+  <p class="backup-note">
+    Los respaldos se almacenan localmente en el servidor. Para una estrategia
+    de respaldo segura, descargue y conserve las copias fuera del equipo.
+  </p>
+</div>

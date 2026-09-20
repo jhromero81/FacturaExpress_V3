@@ -1,0 +1,219 @@
+<div class="dashboard">
+  <!-- Indicador de carga -->
+  @if (loading()) {
+    <div class="empty-state">
+      <span class="material-icons">sync</span>
+      <p>Cargando datos del panel...</p>
+    </div>
+  }
+
+  <!-- Tarjetas KPI -->
+  <div class="kpi-grid">
+    @for (kpi of kpiCards; track kpi.key) {
+      <div class="stat-card">
+        <div class="stat-card-header">
+          <span class="material-icons stat-icon">{{ kpi.icon }}</span>
+          @if (kpi.variacion !== null) {
+            <span
+              class="stat-variacion"
+              [class.positive]="kpi.variacion >= 0"
+              [class.negative]="kpi.variacion < 0"
+              [title]="kpi.baseComparacion ?? ''"
+            >
+              <span class="material-icons">{{ kpi.variacion >= 0 ? 'trending_up' : 'trending_down' }}</span>
+              {{ kpi.variacion >= 0 ? '+' : '' }}{{ kpi.variacion }}%
+            </span>
+          }
+        </div>
+        <div class="stat-value font-mono">{{ kpi.value }}</div>
+        <div class="stat-label">{{ kpi.label }}</div>
+      </div>
+    }
+  </div>
+
+  <!-- Contenido principal: grafico + transacciones -->
+  <div class="dashboard-content">
+    <!-- Grafico de ventas semanales -->
+    <div class="content-card chart-card">
+      <h3 class="card-title">Ventas de la Semana</h3>
+      <div class="chart-container" #chartRef>
+        <svg viewBox="0 0 600 250" class="weekly-chart" (mouseleave)="cerrarTooltip()">
+          <defs>
+            <linearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="var(--accent)" stop-opacity="0.3" />
+              <stop offset="100%" stop-color="var(--accent)" stop-opacity="0.02" />
+            </linearGradient>
+          </defs>
+
+          <!-- Lineas de referencia horizontales -->
+          @for (i of lineasReferencia; track i) {
+            <line x1="40" [attr.y1]="30 + i * 45" x2="580" [attr.y2]="30 + i * 45" stroke="var(--border)" stroke-width="1" />
+          }
+
+          <!-- Barras del grafico -->
+          @for (d of chartData; track d.key; let i = $index) {
+              <g
+                class="chart-bar-group"
+                (mouseenter)="handleBarHover($event, d)"
+                (mousemove)="handleBarHover($event, d)"
+                (click)="abrirDetalle(d)"
+              >
+                @if (barHeight(d) > 0) {
+                  <rect
+                    class="bar-rect"
+                    [style.animation-delay.ms]="i * 60"
+                    [attr.x]="barX(i)"
+                    [attr.y]="210 - barHeight(d)"
+                    width="42"
+                    [attr.height]="barHeight(d)"
+                    rx="6"
+                    fill="var(--accent)"
+                    [attr.opacity]="d.key === mejorDia?.key ? 1 : 0.85"
+                  />
+                } @else {
+                  <rect
+                    class="bar-rect"
+                    [style.animation-delay.ms]="i * 60"
+                    [attr.x]="barX(i)"
+                    y="208"
+                    width="42"
+                    height="2"
+                    rx="1"
+                    fill="var(--accent)"
+                    opacity="0.35"
+                  />
+                }
+
+                <!-- Valor sobre la barra (solo si hay ventas) -->
+                @if (d.value > 0) {
+                  <text [attr.x]="barCenter(i)" [attr.y]="210 - barHeight(d) - 8" text-anchor="middle" class="chart-value-label">
+                    {{ shortMoney(d.value) }}
+                  </text>
+                }
+
+                <!-- Etiqueta del dia -->
+                <text [attr.x]="barCenter(i)" y="235" text-anchor="middle" class="chart-day-label">
+                  {{ d.day }}
+                </text>
+              </g>
+          }
+        </svg>
+
+        <!-- Tooltip al pasar el mouse sobre una barra -->
+        @if (tooltip(); as t) {
+          <div class="chart-tooltip" [style.left.px]="t.x" [style.top.px]="t.y">
+            <div class="chart-tooltip-title">{{ t.dia.day }} · {{ date(t.dia.fecha) }}</div>
+            <div class="chart-tooltip-row">
+              <span class="legend-dot" style="background-color: var(--accent)"></span>
+              <span>Ventas: <strong>{{ money(t.dia.value) }}</strong></span>
+            </div>
+            <div class="chart-tooltip-row">
+              <span class="material-icons">receipt_long</span>
+              <span>{{ t.dia.facturas }} factura(s)</span>
+            </div>
+            @if (semanaTotal > 0) {
+              <div class="chart-tooltip-row">
+                <span class="material-icons">pie_chart</span>
+                <span>{{ ((t.dia.value / semanaTotal) * 100).toFixed(1) }}% de la semana</span>
+              </div>
+            }
+            <div class="chart-tooltip-hint">Clic para ver detalle</div>
+          </div>
+        }
+      </div>
+    </div>
+
+    <!-- Panel lateral: transacciones + productos top -->
+    <div class="dashboard-side">
+      <!-- Lista de ultimas transacciones -->
+      <div class="content-card transactions-card">
+        <h3 class="card-title">Ultimas Transacciones</h3>
+        <div class="transactions-list">
+          @if (transacciones().length === 0) {
+            <div class="empty-state">
+              <span class="material-icons">receipt_long</span>
+              <p>No hay transacciones recientes</p>
+            </div>
+          } @else {
+            @for (tx of transacciones(); track tx.id) {
+              <div class="transaction-item">
+                <span class="material-icons tx-icon">receipt</span>
+                <div class="tx-info">
+                  <span class="tx-number font-mono">{{ tx.numero }}</span>
+                  <span class="tx-time">{{ ago(tx.fecha) }}</span>
+                </div>
+                <span class="tx-amount font-mono">{{ money(tx.total) }}</span>
+              </div>
+            }
+          }
+        </div>
+      </div>
+
+      <!-- Productos mas vendidos -->
+      <div class="content-card products-card">
+        <h3 class="card-title">Productos Mas Vendidos</h3>
+        <div class="top-products">
+          @if (topProducts().length === 0) {
+            <div class="empty-state">
+              <span class="material-icons">inventory_2</span>
+              <p>Sin ventas registradas</p>
+            </div>
+          } @else {
+            @for (p of topProducts(); track p.id; let i = $index) {
+              <div class="top-product-item">
+                <span class="product-rank">#{{ i + 1 }}</span>
+                <div class="product-details">
+                  <span class="product-name">{{ p.nombre }}</span>
+                  <span class="product-sold font-mono">{{ p.vendidos }} vendidos</span>
+                </div>
+              </div>
+            }
+          }
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de detalle de un dia del grafico -->
+  @if (detailBar(); as bar) {
+    <div class="modal-overlay open" (click)="cerrarDetalle()">
+      <div class="modal-content" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <h3>Detalle del dia {{ bar.day }}</h3>
+        </div>
+        <div class="modal-body">
+          <div class="report-detail-row">
+            <div class="report-detail-block">
+              <span class="material-icons">today</span>
+              <div>
+                <div class="report-detail-label">Fecha</div>
+                <div class="report-detail-value">{{ date(bar.fecha) }}</div>
+              </div>
+            </div>
+            <div class="report-detail-block">
+              <span class="legend-dot" style="background-color: var(--accent); margin-top: 6px"></span>
+              <div>
+                <div class="report-detail-label">Ventas del dia</div>
+                <div class="report-detail-value font-mono">{{ money(bar.value) }}</div>
+                <div class="report-detail-sub font-mono">{{ bar.facturas }} factura(s)</div>
+              </div>
+            </div>
+          </div>
+          <p class="report-detail-variation">
+            Participacion en la semana:
+            <strong>{{ semanaTotal > 0 ? ((bar.value / semanaTotal) * 100).toFixed(1) + '%' : '--' }}</strong>
+          </p>
+          @if (bar.key === mejorDia?.key && bar.value > 0) {
+            <p class="report-detail-best">
+              <span class="material-icons">emoji_events</span>
+              Mejor dia de la semana
+            </p>
+          }
+        </div>
+        <div class="modal-footer">
+          <button class="btn-cancel-compact" (click)="cerrarDetalle()">Cerrar</button>
+        </div>
+      </div>
+    </div>
+  }
+</div>

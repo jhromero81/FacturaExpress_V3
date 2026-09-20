@@ -1,0 +1,14 @@
+$kind: http-request
+url: "{{baseUrl}}/reportes/ventas-semanales"
+method: GET
+headers:
+  Authorization: Bearer {{token}}
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Ventas de los ultimos 7 dias (HTTP 200)', function () {
+          pm.response.to.have.status(200);
+          pm.expect(pm.response.json().ventas).to.be.an('array');
+      });
+    language: text/javascript
+order: 2000

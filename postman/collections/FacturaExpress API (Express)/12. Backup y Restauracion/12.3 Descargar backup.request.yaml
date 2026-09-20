@@ -1,0 +1,13 @@
+$kind: http-request
+url: "{{baseUrl}}/backup/{{archivoBackup}}/download"
+method: GET
+headers:
+  Authorization: Bearer {{token}}
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Backup descargado (HTTP 200)', function () {
+          pm.response.to.have.status(200);
+      });
+    language: text/javascript
+order: 3000

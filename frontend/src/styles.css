@@ -1,0 +1,1002 @@
+/* ============================================================
+   FacturaExpress - Estilos globales
+   Design tokens, reset, utilidades, temas de accesibilidad,
+   layout principal, tablas, formularios, modales y toasts.
+   ============================================================ */
+
+:root {
+  /* Colores principales */
+  --accent: #1abc9c;
+  --accent-dk: #148f77;
+  --danger: #e74c3c;
+  --danger-dk: #c0392b;
+
+  /* Colores de fondo y estructura */
+  --sidebar-bg: #0f1923;
+  --bg-main: #f4f6f9;
+  --card-bg: #ffffff;
+
+  /* Colores de texto */
+  --text-dark: #1a2535;
+  --text-muted: #90a4ae;
+
+  /* Bordes y divider */
+  --border: #eceff1;
+
+  /* Estados */
+  --success: #27ae60;
+  --warning: #f39c12;
+  --info: #3498db;
+
+  /* Dimensiones */
+  --sidebar-w: 230px;
+  --topbar-h: 64px;
+  --footer-h: 50px;
+
+  /* Fuentes */
+  --font-body: 'Roboto', sans-serif;
+  --font-mono: 'Space Mono', monospace;
+
+  /* Sombras */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
+
+  /* Transiciones */
+  --transition: 0.3s ease;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 15px;
+  scroll-behavior: smooth;
+  width: 100%;
+}
+
+body {
+  font-family: var(--font-body);
+  background-color: var(--bg-main);
+  color: var(--text-dark);
+  line-height: 1.6;
+  display: flex;
+  min-height: 100vh;
+  width: 100%;
+  overflow-x: hidden;
+  transition: background-color var(--transition), color var(--transition);
+}
+
+app-root {
+  display: flex;
+  width: 100%;
+  min-height: 100vh;
+}
+
+/* El componente enrutado (host) debe ocupar todo el ancho;
+   sin esto las paginas de primer nivel quedan alineadas a la izquierda */
+app-root > *:not(router-outlet) {
+  display: block;
+  width: 100%;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+a:hover {
+  color: var(--accent-dk);
+}
+
+/* ============================
+   CLASES UTILITARIAS
+   ============================ */
+
+/** Fuente monoespaciada para montos y datos numericos */
+.font-mono {
+  font-family: var(--font-mono);
+}
+
+/** Indicador pulsante de estado activo */
+.pulse-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--success);
+  animation: pulse 2s infinite;
+  margin-right: 6px;
+}
+
+@keyframes pulse {
+  0% { box-shadow: 0 0 0 0 rgba(39, 174, 96, 0.6); }
+  70% { box-shadow: 0 0 0 8px rgba(39, 174, 96, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(39, 174, 96, 0); }
+}
+
+/** Boton generico teal */
+.btn-teal {
+  background-color: var(--accent);
+  color: #fff;
+  border: none;
+  padding: 10px 24px;
+  border-radius: 40px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.9rem;
+  font-family: var(--font-body);
+  transition: background-color var(--transition), transform 0.15s ease;
+}
+
+.btn-teal:hover {
+  background-color: var(--accent-dk);
+  transform: translateY(-1px);
+}
+
+.btn-teal:active {
+  transform: translateY(0);
+}
+
+.btn-teal:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/** Boton oscuro */
+.btn-dark {
+  background-color: var(--sidebar-bg);
+  color: #fff;
+  border: none;
+  padding: 10px 24px;
+  border-radius: 40px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.9rem;
+  transition: background-color var(--transition);
+}
+
+.btn-dark:hover {
+  background-color: #162230;
+}
+
+/** Boton con borde accent (outline) */
+.btn-outline-accent {
+  background: transparent;
+  color: var(--accent);
+  border: 2px solid var(--accent);
+  padding: 8px 22px;
+  border-radius: 40px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.9rem;
+  font-family: var(--font-body);
+  transition: all var(--transition);
+}
+
+.btn-outline-accent:hover:not(:disabled) {
+  background-color: var(--accent);
+  color: #fff;
+}
+
+.btn-outline-accent:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/** Boton plano (sin fondo) */
+.btn-flat {
+  background: transparent;
+  color: var(--text-muted);
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-family: var(--font-body);
+  transition: color var(--transition), background-color var(--transition);
+}
+
+.btn-flat:hover {
+  color: var(--text-dark);
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+/** Boton de peligro compacto */
+.btn-danger-compact {
+  background: linear-gradient(135deg, var(--danger), var(--danger-dk));
+  color: #fff;
+  border: none;
+  padding: 8px 20px;
+  border-radius: 40px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.85rem;
+  transition: opacity var(--transition);
+}
+
+.btn-danger-compact:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.btn-danger-compact:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/** Boton cancelar del modal */
+.btn-cancel-compact {
+  background: transparent;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 20px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-family: var(--font-body);
+  color: var(--text-muted);
+  transition: all var(--transition);
+}
+
+.btn-cancel-compact:hover {
+  border-color: var(--text-dark);
+  color: var(--text-dark);
+}
+
+/** Contenedor de tarjetas de contenido */
+.content-card {
+  background: var(--card-bg);
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border);
+  width: 100%;
+  transition: box-shadow var(--transition), border-color var(--transition);
+}
+
+.content-card:hover {
+  box-shadow: var(--shadow-md);
+}
+
+.card-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-dark);
+  margin-bottom: 20px;
+}
+
+/* ============================
+   MODO OSCURO
+   ============================ */
+body.fx-dark-mode {
+  --bg-main: #121212;
+  --card-bg: #1e2a32;
+  --text-dark: #e0e0e0;
+  --text-muted: #78909c;
+  --border: #2c3e50;
+  --sidebar-bg: #0a0f14;
+}
+
+body.fx-dark-mode .content-card {
+  background-color: #1e2a32;
+}
+
+body.fx-dark-mode .btn-flat:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+/* ============================
+   ALTO CONTRASTE
+   ============================ */
+body.fx-high-contrast {
+  --accent: #ffeb3b;
+  --accent-dk: #fdd835;
+  --text-dark: #000000;
+  --bg-main: #ffffff;
+  --card-bg: #ffffff;
+  --border: #000000;
+  --sidebar-bg: #000000;
+}
+
+body.fx-high-contrast .content-card {
+  border-width: 2px;
+  border-color: #000;
+}
+
+body.fx-high-contrast .btn-teal {
+  color: #000;
+  font-weight: 700;
+}
+
+body.fx-high-contrast .sidebar {
+  border-right: 3px solid var(--accent);
+}
+
+/* ============================
+   LAYOUT PRINCIPAL
+   ============================ */
+
+.main-layout {
+  display: flex;
+  width: 100%;
+  min-height: 100vh;
+}
+
+.app-layout {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  width: calc(100% - var(--sidebar-w));
+  min-height: 100vh;
+  margin-left: var(--sidebar-w);
+}
+
+.main-content {
+  flex: 1;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - var(--topbar-h) - var(--footer-h));
+  margin-top: var(--topbar-h);
+  margin-bottom: var(--footer-h);
+  padding: 24px 32px;
+}
+
+/* ============================
+   TABLAS
+   ============================ */
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.data-table thead {
+  background-color: var(--sidebar-bg);
+  color: var(--accent);
+}
+
+.data-table th {
+  padding: 12px 16px;
+  text-align: left;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.data-table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.data-table tbody tr {
+  transition: background-color var(--transition);
+}
+
+.data-table tbody tr:hover {
+  background-color: rgba(26, 188, 156, 0.05);
+}
+
+.data-table .amount-cell {
+  font-family: var(--font-mono);
+  font-weight: 600;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text-muted);
+}
+
+.empty-state .material-icons {
+  font-size: 48px;
+  opacity: 0.3;
+  display: block;
+  margin-bottom: 8px;
+}
+
+.empty-table {
+  text-align: center;
+  padding: 40px 20px !important;
+  color: var(--text-muted);
+}
+
+.empty-table .material-icons {
+  font-size: 48px;
+  opacity: 0.3;
+  display: block;
+  margin-bottom: 8px;
+}
+
+/* ============================
+   BADGES DE ESTADO
+   ============================ */
+.badge-status {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.badge-status.enviado,
+.badge-status.enviada {
+  background-color: rgba(39, 174, 96, 0.12);
+  color: var(--success);
+}
+
+.badge-status.pendiente {
+  background-color: rgba(243, 156, 18, 0.12);
+  color: var(--warning);
+}
+
+.badge-status.rechazado,
+.badge-status.rechazada {
+  background-color: rgba(231, 76, 60, 0.12);
+  color: var(--danger);
+}
+
+/* ============================
+   FORMULARIOS
+   ============================ */
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-dark);
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-family: var(--font-body);
+  color: var(--text-dark);
+  background-color: var(--card-bg);
+  transition: border-color var(--transition), box-shadow var(--transition);
+  outline: none;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(26, 188, 156, 0.15);
+}
+
+.form-group .error-text {
+  color: var(--danger);
+  font-size: 0.8rem;
+  margin-top: 4px;
+}
+
+.form-group input.input-error {
+  border-color: var(--danger);
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.form-row.triple {
+  grid-template-columns: 1fr 1fr 1fr;
+}
+
+@media (max-width: 768px) {
+  .form-row,
+  .form-row.triple {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Campo de busqueda con icono (shared) */
+.search-wrapper {
+  display: flex;
+  align-items: center;
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  padding: 0 14px;
+  min-width: 300px;
+  transition: border-color var(--transition);
+}
+
+.search-wrapper:focus-within {
+  border-color: var(--accent);
+}
+
+.search-wrapper .material-icons {
+  color: var(--text-muted);
+  margin-right: 8px;
+}
+
+.search-wrapper input {
+  border: none;
+  outline: none;
+  padding: 10px 0;
+  font-size: 0.88rem;
+  font-family: var(--font-body);
+  color: var(--text-dark);
+  background: transparent;
+  width: 100%;
+}
+
+.search-input-wrapper {
+  display: flex;
+  align-items: center;
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  padding: 0 14px;
+  transition: border-color var(--transition);
+}
+
+.search-input-wrapper:focus-within {
+  border-color: var(--accent);
+}
+
+.search-input-wrapper .material-icons {
+  color: var(--text-muted);
+  margin-right: 10px;
+}
+
+.search-input-wrapper input {
+  flex: 1;
+  border: none;
+  outline: none;
+  padding: 12px 0;
+  font-size: 0.9rem;
+  font-family: var(--font-body);
+  color: var(--text-dark);
+  background: transparent;
+}
+
+.filter-select {
+  padding: 8px 14px;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-family: var(--font-body);
+  color: var(--text-dark);
+  background-color: var(--card-bg);
+}
+
+.filter-group {
+  display: flex;
+  gap: 6px;
+}
+
+.tab-btn {
+  padding: 6px 16px;
+  border: 1.5px solid var(--border);
+  border-radius: 20px;
+  background: transparent;
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 600;
+  font-family: var(--font-body);
+  color: var(--text-muted);
+  transition: all var(--transition);
+}
+
+.tab-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.tab-btn.active {
+  background-color: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+/* Botones de accion en tablas (shared) */
+.action-btn,
+.doc-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  border: 1.5px solid var(--border);
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-dark);
+  transition: all var(--transition);
+}
+
+.action-btn .material-icons,
+.doc-btn .material-icons {
+  font-size: 18px;
+}
+
+.action-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.action-btn.danger:hover:not(:disabled) {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.action-btn.restore:hover:not(:disabled) {
+  border-color: var(--warning);
+  color: var(--warning);
+}
+
+.action-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.doc-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.doc-btn.pdf {
+  color: var(--danger);
+}
+
+.doc-btn.pdf:hover {
+  background-color: rgba(231, 76, 60, 0.1);
+  border-color: var(--danger);
+}
+
+.doc-btn.xml {
+  color: var(--info);
+}
+
+.doc-btn.xml:hover {
+  background-color: rgba(52, 152, 219, 0.1);
+  border-color: var(--info);
+}
+
+.doc-btn.view {
+  color: var(--accent);
+}
+
+.doc-btn.view:hover {
+  background-color: rgba(26, 188, 156, 0.1);
+  border-color: var(--accent);
+}
+
+.doc-btn.change {
+  color: var(--warning);
+}
+
+.doc-btn.change:hover {
+  background-color: rgba(243, 156, 18, 0.1);
+  border-color: var(--warning);
+}
+
+.doc-btn.del {
+  color: var(--danger);
+}
+
+.doc-btn.del:hover {
+  background-color: rgba(231, 76, 60, 0.1);
+  border-color: var(--danger);
+}
+
+.btn-sm {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  font-size: 0.78rem;
+}
+
+.product-actions {
+  display: flex;
+  gap: 6px;
+}
+
+/* Sugerencias de busqueda */
+.search-suggestions {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow-md);
+  z-index: 10;
+  max-height: 200px;
+  overflow-y: auto;
+  margin-top: 4px;
+}
+
+.suggestion-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 10px 14px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  font-family: var(--font-body);
+  transition: background-color var(--transition);
+}
+
+.suggestion-item:hover {
+  background-color: rgba(26, 188, 156, 0.08);
+}
+
+.suggestion-name {
+  font-size: 0.88rem;
+  color: var(--text-dark);
+}
+
+.suggestion-price {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+/* ============================
+   OVERLAY / MODAL
+   ============================ */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity var(--transition), visibility var(--transition);
+}
+
+.modal-overlay.open {
+  opacity: 1;
+  visibility: visible;
+}
+
+.modal-content {
+  background: var(--card-bg);
+  border-radius: 16px;
+  width: 90%;
+  max-width: 500px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: var(--shadow-lg);
+}
+
+.modal-wide {
+  max-width: 720px;
+}
+
+.modal-header {
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border);
+}
+
+.modal-header h3 {
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.modal-body {
+  padding: 24px;
+}
+
+.modal-footer {
+  padding: 16px 24px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+/* ============================
+   TOAST / NOTIFICACIONES
+   ============================ */
+.toast-container {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.toast {
+  padding: 14px 20px;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 500;
+  box-shadow: var(--shadow-md);
+  animation: slideIn 0.3s ease;
+  min-width: 280px;
+}
+
+.toast.success {
+  background-color: var(--success);
+}
+
+.toast.error {
+  background-color: var(--danger);
+}
+
+.toast.info {
+  background-color: var(--info);
+}
+
+.toast.warning {
+  background-color: var(--warning);
+}
+
+@keyframes slideIn {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+/* ============================
+   PAGINACION
+   ============================ */
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.pagination button {
+  background: transparent;
+  border: 1.5px solid var(--border);
+  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--text-dark);
+  transition: all var(--transition);
+}
+
+.pagination button:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.pagination button:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.pagination .page-info {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+/* ============================
+   BARRA DE PROGRESO
+   ============================ */
+.progress-bar {
+  width: 100%;
+  height: 10px;
+  background-color: var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.progress-bar .determinate {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), var(--accent-dk));
+  border-radius: 10px;
+  transition: width 0.5s ease;
+}
+
+.legend-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+/* ============================
+   RESPONSIVE
+   ============================ */
+@media (max-width: 768px) {
+  .app-layout {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .main-content {
+    padding: 16px;
+  }
+
+  .topbar {
+    left: 0 !important;
+    width: 100% !important;
+  }
+
+  .app-footer {
+    left: 0 !important;
+    width: 100% !important;
+  }
+
+  .search-wrapper {
+    min-width: auto;
+  }
+}
+
+/* ============================================================
+   Paginacion compartida (clientes, productos, facturas)
+   Los listados se paginan en el servidor: el cliente nunca recibe
+   solo la primera pagina de forma silenciosa.
+   ============================================================ */
+.pagination-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 20px;
+  padding: 10px 0;
+}
+
+.pagination-info {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.btn-pagina {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  background-color: var(--card-bg);
+  color: var(--text-dark);
+  cursor: pointer;
+  transition: border-color 0.2s ease, color 0.2s ease;
+}
+
+.btn-pagina:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.btn-pagina:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn-pagina .material-icons {
+  font-size: 20px;
+}

@@ -1,0 +1,104 @@
+<div class="errores-page">
+  <!-- KPIs del modulo -->
+  <div class="errores-kpis">
+    <div class="kpi-card total">
+      <span class="material-icons">error_outline</span>
+      <div>
+        <span class="kpi-label">Total Errores</span>
+        <span class="kpi-value font-mono">{{ kpis.total }}</span>
+      </div>
+    </div>
+    <div class="kpi-card open">
+      <span class="material-icons">pending_actions</span>
+      <div>
+        <span class="kpi-label">Sin Resolver</span>
+        <span class="kpi-value font-mono">{{ kpis.noResueltos }}</span>
+      </div>
+    </div>
+    <div class="kpi-card resolved">
+      <span class="material-icons">task_alt</span>
+      <div>
+        <span class="kpi-label">Resueltos</span>
+        <span class="kpi-value font-mono">{{ kpis.resueltos }}</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Filtros -->
+  <div class="errores-toolbar">
+    <div class="filter-group">
+      <select class="filter-select" [(ngModel)]="tipoFilter" (ngModelChange)="loadErrores()" name="tipoFilter">
+        <option value="">Todos los tipos</option>
+        @for (t of tipos; track t) {
+          <option [value]="t">{{ tipoLabel(t) }}</option>
+        }
+      </select>
+      <select
+        class="filter-select"
+        [(ngModel)]="resueltoFilter"
+        (ngModelChange)="loadErrores()"
+        name="resueltoFilter"
+      >
+        <option value="">Todos los estados</option>
+        <option value="0">Sin resolver</option>
+        <option value="1">Resueltos</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Tabla de errores -->
+  <div class="content-card">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Fecha</th>
+          <th>Tipo</th>
+          <th>Mensaje</th>
+          <th>Factura</th>
+          <th>Estado</th>
+          <th>Accion</th>
+        </tr>
+      </thead>
+      <tbody>
+        @if (loading()) {
+          <tr>
+            <td colspan="6" class="empty-table">
+              <span class="material-icons">sync</span>
+              <p>Cargando errores...</p>
+            </td>
+          </tr>
+        } @else if (errores.length === 0) {
+          <tr>
+            <td colspan="6" class="empty-table">
+              <span class="material-icons">check_circle_outline</span>
+              <p>No hay errores registrados</p>
+            </td>
+          </tr>
+        } @else {
+          @for (error of errores; track error.id) {
+            <tr>
+              <td class="font-mono fecha-cell">{{ fecha(error.createdAt) }}</td>
+              <td>
+                <span class="tipo-badge" [class]="error.tipo">{{ tipoLabel(error.tipo) }}</span>
+              </td>
+              <td class="error-msg">{{ error.mensaje }}</td>
+              <td class="font-mono">{{ error.facturaNumero || '--' }}</td>
+              <td>
+                <span class="badge-status" [class.enviada]="error.resuelto" [class.rechazada]="!error.resuelto">
+                  {{ error.resuelto ? 'Resuelto' : 'Abierto' }}
+                </span>
+              </td>
+              <td>
+                @if (!error.resuelto) {
+                  <button type="button" class="btn-outline-accent btn-sm" (click)="handleResolver(error)">
+                    Marcar Resuelto
+                  </button>
+                }
+              </td>
+            </tr>
+          }
+        }
+      </tbody>
+    </table>
+  </div>
+</div>

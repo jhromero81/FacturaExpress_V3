@@ -1,0 +1,24 @@
+$kind: http-request
+url: "{{baseUrl}}/clientes/{{clienteId}}"
+method: PUT
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{token}}
+body:
+  type: text
+  content: |-
+    {
+      "nombre": "Cliente Actualizado Postman",
+      "email": "actualizado@correo.com",
+      "telefono": "3109876543"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Cliente actualizado (HTTP 200)', function () {
+          pm.response.to.have.status(200);
+          const json = pm.response.json();
+          pm.expect(json.cliente.nombre).to.eql('Cliente Actualizado Postman');
+      });
+    language: text/javascript
+order: 4000

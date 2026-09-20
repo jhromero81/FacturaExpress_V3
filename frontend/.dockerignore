@@ -1,0 +1,22 @@
+# ============================================================
+# Contexto de build del frontend: se excluye lo que no debe copiarse
+# a la imagen (dependencias locales, artefactos y configuracion local).
+# ============================================================
+
+node_modules
+dist
+.angular
+npm-debug.log*
+
+.env
+.env.*
+!.env.example
+
+.DS_Store
+Thumbs.db
+.idea
+.vscode
+*.swp
+
+.git
+.gitignore

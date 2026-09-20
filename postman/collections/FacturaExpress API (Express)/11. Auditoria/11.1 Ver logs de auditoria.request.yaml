@@ -1,0 +1,18 @@
+$kind: http-request
+url: "{{baseUrl}}/logs?limite=50"
+method: GET
+headers:
+  Authorization: Bearer {{token}}
+queryParams:
+  limite: "50"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Logs de auditoria (HTTP 200)', function () {
+          pm.response.to.have.status(200);
+          const json = pm.response.json();
+          pm.expect(json.logs).to.be.an('array');
+          pm.expect(json.tablas).to.be.an('array');
+      });
+    language: text/javascript
+order: 1000

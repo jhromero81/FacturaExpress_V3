@@ -1,0 +1,34 @@
+# --- Dependencias ---
+node_modules/
+**/node_modules/
+
+# --- Entornos ---
+.env
+**/.env
+.env.local
+.env.*.local
+!.env.example
+!**/.env.example
+
+# --- Builds y artefactos ---
+dist/
+**/dist/
+coverage/
+*.log
+npm-debug.log*
+
+# --- Cache de build de Angular ---
+.angular/
+**/.angular/
+
+# --- Sistema ---
+.DS_Store
+Thumbs.db
+
+# --- Editor / IDE ---
+.idea/
+.vscode/
+*.swp
+
+# --- Planes internos (instrumentos de trabajo, no se versionan) ---
+plans/

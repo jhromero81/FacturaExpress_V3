@@ -1,0 +1,130 @@
+/**
+ * features/admin/backup.component.css
+ * Estilos del modulo de respaldos (reemplaza Backup.css de React).
+ */
+
+/* Panel de accion principal con gradiente teal */
+.backup-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  background: linear-gradient(135deg, var(--accent) 0%, #16a085 100%);
+  border-radius: 12px;
+  padding: 24px 28px;
+  margin-bottom: 24px;
+  color: #fff;
+}
+
+.backup-hero-info {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.backup-icon {
+  font-size: 42px !important;
+  opacity: 0.9;
+}
+
+.backup-hero h3 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.backup-hero p {
+  font-size: 0.85rem;
+  opacity: 0.85;
+  max-width: 520px;
+}
+
+.backup-hero .btn-teal {
+  background-color: #0f1923;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  height: 44px;
+  padding: 0 22px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all var(--transition);
+}
+
+.backup-hero .btn-teal:hover:not(:disabled) {
+  background-color: #000;
+}
+
+.backup-hero .btn-teal:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.backup-hero .btn-teal .material-icons {
+  font-size: 18px;
+}
+
+/* Acciones por fila */
+.backup-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.action-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  border: 1.5px solid var(--border);
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-dark);
+  transition: all var(--transition);
+}
+
+.action-btn .material-icons {
+  font-size: 18px;
+}
+
+.action-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.action-btn.restore:hover:not(:disabled) {
+  border-color: var(--info);
+  color: var(--info);
+}
+
+.action-btn.danger:hover:not(:disabled) {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.action-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Nota inferior */
+.backup-note {
+  margin-top: 16px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  max-width: 640px;
+}
+
+@media (max-width: 768px) {
+  .backup-hero {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

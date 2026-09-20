@@ -1,0 +1,26 @@
+$kind: http-request
+url: "{{baseUrl}}/clientes"
+method: POST
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{token}}
+body:
+  type: text
+  content: |-
+    {
+      "identificacion": "902.222.333-9",
+      "nombre": "Cliente Postman Test",
+      "email": "cliente_test@correo.com",
+      "telefono": "3001234567"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Cliente creado (HTTP 201)', function () {
+          pm.response.to.have.status(201);
+      });
+
+      const json = pm.response.json();
+      pm.collectionVariables.set('clienteId', json.cliente.id);
+    language: text/javascript
+order: 2000

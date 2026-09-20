@@ -1,0 +1,99 @@
+<div class="login-page">
+  <!-- Elementos decorativos de fondo (gradientes radiales) -->
+  <div class="login-bg-blob blob-1"></div>
+  <div class="login-bg-blob blob-2"></div>
+
+  <!-- Tarjeta principal de login -->
+  <div class="login-card">
+    <!-- Botones de accesibilidad (antes del login) -->
+    <div class="login-accessibility">
+      <button
+        type="button"
+        class="acc-btn"
+        (click)="auth.alternarModoOscuro()"
+        [title]="auth.preferencias().modoOscuro ? 'Modo claro' : 'Modo oscuro'"
+      >
+        <span class="material-icons">{{ auth.preferencias().modoOscuro ? 'light_mode' : 'dark_mode' }}</span>
+      </button>
+      <button
+        type="button"
+        class="acc-btn"
+        (click)="auth.alternarAltoContraste()"
+        [title]="auth.preferencias().altoContraste ? 'Contraste normal' : 'Alto contraste'"
+      >
+        <span class="material-icons">contrast</span>
+      </button>
+    </div>
+
+    <!-- Logo y titulo -->
+    <div class="login-header">
+      <div class="login-logo">F</div>
+      <h1 class="login-title">FacturaExpress</h1>
+      <p class="login-subtitle">Sistema de Facturacion Electronica DIAN</p>
+      <div class="login-dian-badge">
+        <span class="pulse-dot"></span>
+        <span>DIAN Conectado</span>
+      </div>
+    </div>
+
+    <!-- Formulario de credenciales -->
+    <form class="login-form" (ngSubmit)="ingresar()">
+      <!-- Campo NIT / Usuario -->
+      <div class="login-field">
+        <span class="material-icons field-icon">business</span>
+        <input
+          type="text"
+          name="nit"
+          placeholder="NIT o Usuario"
+          [(ngModel)]="nit"
+          [disabled]="isLoading"
+          autocomplete="username"
+          autofocus
+        />
+      </div>
+
+      <!-- Campo Contrasena -->
+      <div class="login-field">
+        <span class="material-icons field-icon">lock</span>
+        <input
+          type="{{ mostrarPassword ? 'text' : 'password' }}"
+          name="password"
+          placeholder="Contrasena"
+          [(ngModel)]="password"
+          [disabled]="isLoading"
+          autocomplete="current-password"
+        />
+        <button
+          type="button"
+          class="password-toggle"
+          (click)="mostrarPassword = !mostrarPassword"
+        >
+          <span class="material-icons">{{ mostrarPassword ? 'visibility_off' : 'visibility' }}</span>
+        </button>
+      </div>
+
+      <!-- Mensaje de error -->
+      @if (error) {
+        <div class="login-error">{{ error }}</div>
+      }
+
+      <!-- Boton de iniciar sesion -->
+      <button class="login-btn" type="submit" [disabled]="isLoading">
+        @if (isLoading) {
+          <span class="login-btn-loading">
+            <span class="spinner"></span>
+            Ingresando...
+          </span>
+        } @else {
+          Iniciar Sesion
+        }
+      </button>
+    </form>
+
+    <!-- Links auxiliares -->
+    <div class="login-links">
+      <a href="#recuperar" (click)="$event.preventDefault()">Recuperar acceso</a>
+      <a href="#admin" (click)="$event.preventDefault()">Contacte al administrador</a>
+    </div>
+  </div>
+</div>

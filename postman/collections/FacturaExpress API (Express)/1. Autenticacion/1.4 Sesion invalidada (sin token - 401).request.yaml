@@ -1,0 +1,12 @@
+$kind: http-request
+name: 1.4 Sesion invalidada (sin token -> 401)
+url: "{{baseUrl}}/auth/me"
+method: GET
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Solicitud sin token es rechazada (HTTP 401)', function () {
+          pm.response.to.have.status(401);
+      });
+    language: text/javascript
+order: 4000

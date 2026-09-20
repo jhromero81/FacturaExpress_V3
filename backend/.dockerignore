@@ -1,0 +1,32 @@
+# ============================================================
+# Contexto de build de la API: se excluye todo lo que no debe entrar
+# en la imagen. Sin este archivo, `COPY . .` sobrescribia las
+# dependencias instaladas con `npm ci` y podia hornear un .env local
+# (con secretos reales) dentro de la imagen.
+# ============================================================
+
+# Dependencias y artefactos locales
+node_modules
+npm-debug.log*
+
+# Secretos y configuracion local
+.env
+.env.*
+!.env.example
+
+# Pruebas y utilidades de desarrollo (no se necesitan en runtime)
+test
+coverage
+
+# Sistema y editor
+.DS_Store
+Thumbs.db
+.idea
+.vscode
+*.swp
+
+# Control de versiones y documentacion
+.git
+.gitignore
+.gitattributes
+*.md

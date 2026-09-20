@@ -1,0 +1,76 @@
+<div class="auditoria-page">
+  <!-- Barra de herramientas -->
+  <div class="auditoria-toolbar">
+    <div class="search-wrapper">
+      <span class="material-icons">search</span>
+      <input
+        type="text"
+        placeholder="Buscar por accion o usuario..."
+        [(ngModel)]="searchTerm"
+        name="busqueda"
+      />
+    </div>
+    <div class="filter-group">
+      <select class="filter-select" [(ngModel)]="tablaFilter" (ngModelChange)="loadLogs()" name="tablaFilter">
+        <option value="">Todas las tablas</option>
+        @for (t of tablas; track t) {
+          <option [value]="t">{{ t }}</option>
+        }
+      </select>
+      <span class="logs-count font-mono">{{ visibleLogs.length }} registros</span>
+    </div>
+  </div>
+
+  <!-- Tabla de auditoria -->
+  <div class="content-card">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Fecha</th>
+          <th>Usuario</th>
+          <th>Accion</th>
+          <th>Tabla</th>
+          <th>Registro</th>
+          <th>IP</th>
+        </tr>
+      </thead>
+      <tbody>
+        @if (loading()) {
+          <tr>
+            <td colspan="6" class="empty-table">
+              <span class="material-icons">sync</span>
+              <p>Cargando auditoria...</p>
+            </td>
+          </tr>
+        } @else if (visibleLogs.length === 0) {
+          <tr>
+            <td colspan="6" class="empty-table">
+              <span class="material-icons">fact_check</span>
+              <p>No hay registros de auditoria</p>
+            </td>
+          </tr>
+        } @else {
+          @for (log of visibleLogs; track log.id) {
+            <tr>
+              <td>
+                <div class="fecha-cell">
+                  <span class="font-mono">{{ formatDate(log.fecha) }}</span>
+                  <span class="fecha-ago">{{ timeAgo(log.fecha) }}</span>
+                </div>
+              </td>
+              <td>{{ log.usuarioNombre }}</td>
+              <td>
+                <span class="accion-tag" [class]="claseAccion(log.accion)">{{ log.accion }}</span>
+              </td>
+              <td>
+                <span class="tabla-tag font-mono">{{ log.tabla }}</span>
+              </td>
+              <td class="font-mono">{{ log.registroId ?? '--' }}</td>
+              <td class="font-mono">{{ log.ip }}</td>
+            </tr>
+          }
+        }
+      </tbody>
+    </table>
+  </div>
+</div>

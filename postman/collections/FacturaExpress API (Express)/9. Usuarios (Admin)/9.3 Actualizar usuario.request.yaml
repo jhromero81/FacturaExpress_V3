@@ -1,0 +1,23 @@
+$kind: http-request
+url: "{{baseUrl}}/usuarios/{{usuarioId}}"
+method: PUT
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{token}}
+body:
+  type: text
+  content: |-
+    {
+      "nombre": "Vendedor Actualizado Postman",
+      "email": "vendedor_actualizado_postman@correo.com"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Usuario actualizado (HTTP 200)', function () {
+          pm.response.to.have.status(200);
+          const json = pm.response.json();
+          pm.expect(json.usuario.nombre).to.eql('Vendedor Actualizado Postman');
+      });
+    language: text/javascript
+order: 3000

@@ -1,0 +1,364 @@
+/**
+ * features/ventas/nueva-venta.component.css
+ * Estilos del punto de venta: layout de dos paneles, carrito con
+ * controles de cantidad y panel de pago oscuro (reemplaza Ventas.css).
+ */
+
+.ventas-layout {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 24px;
+  align-items: start;
+}
+
+/* ============================
+   PANEL DE FORMULARIO
+   ============================ */
+.ventas-form-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.ventas-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.ventas-actions .btn-teal,
+.ventas-actions .btn-outline-accent {
+  display: inline-flex;
+  align-items: center;
+  height: 40px;
+  padding: 0 16px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all var(--transition);
+  gap: 8px;
+}
+
+.ventas-actions .btn-teal {
+  background-color: var(--accent);
+  color: #fff;
+  border: none;
+}
+
+.ventas-actions .btn-teal:hover:not(:disabled) {
+  background-color: var(--accent-dk);
+}
+
+.ventas-actions .btn-outline-accent {
+  background: transparent;
+  color: var(--accent);
+  border: 1.5px solid var(--accent);
+}
+
+.ventas-actions .btn-outline-accent:hover:not(:disabled) {
+  background-color: rgba(26, 188, 156, 0.08);
+}
+
+.ventas-actions .material-icons {
+  font-size: 18px;
+}
+
+.ventas-actions button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Info del cliente */
+.ventas-client-info {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 16px;
+}
+
+/* Busqueda de cliente con autocompletado */
+.ventas-client-search {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  position: relative;
+}
+
+.ventas-client-search .form-group {
+  position: relative;
+}
+
+/* ============================
+   BUSQUEDA DE PRODUCTOS
+   ============================ */
+.ventas-product-search {
+  position: relative;
+}
+
+.cart-table-container {
+  background: var(--card-bg);
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  overflow: hidden;
+  transition: background-color var(--transition), border-color var(--transition);
+}
+
+.empty-cart {
+  text-align: center;
+  padding: 40px 20px !important;
+  color: var(--text-muted);
+}
+
+.empty-cart .material-icons {
+  font-size: 48px;
+  opacity: 0.3;
+  display: block;
+  margin-bottom: 8px;
+}
+
+.product-name-cell {
+  display: flex;
+  flex-direction: column;
+}
+
+.product-name-cell .product-name {
+  font-weight: 600;
+  font-size: 0.88rem;
+  color: var(--text-dark);
+}
+
+.product-code {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+/* Controles de cantidad */
+.qty-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.qty-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1.5px solid var(--border);
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  font-weight: 700;
+  font-family: var(--font-body);
+  color: var(--text-dark);
+  transition: all var(--transition);
+}
+
+.qty-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.qty-btn .material-icons {
+  font-size: 16px;
+}
+
+.qty-btn.delete-btn {
+  border-color: transparent;
+  color: var(--danger);
+}
+
+.qty-btn.delete-btn:hover {
+  background-color: rgba(231, 76, 60, 0.1);
+}
+
+.qty-value {
+  min-width: 24px;
+  text-align: center;
+  font-weight: 700;
+}
+
+.amount-cell {
+  font-weight: 600;
+}
+
+/* ============================
+   PANEL DE PAGO
+   ============================ */
+.payment-panel {
+  background: var(--sidebar-bg);
+  border-radius: 16px;
+  padding: 28px;
+  color: #fff;
+  position: sticky;
+  top: calc(var(--topbar-h) + 24px);
+  transition: background-color var(--transition);
+}
+
+.payment-title {
+  font-size: 1rem;
+  font-weight: 700;
+  margin-bottom: 24px;
+  color: #fff;
+}
+
+.payment-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.payment-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.88rem;
+  color: var(--text-muted);
+}
+
+.payment-row.discount {
+  color: var(--danger);
+}
+
+.discount-input input {
+  width: 70px;
+  height: 32px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  color: #fff;
+  text-align: right;
+  padding: 0 10px;
+  font-family: var(--font-mono);
+  outline: none;
+}
+
+.discount-input input:focus {
+  border-color: var(--accent);
+}
+
+.payment-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.1);
+  margin: 20px 0;
+}
+
+.payment-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.payment-total span:first-child {
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.total-val {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--accent);
+}
+
+.btn-finalizar {
+  width: 100%;
+  padding: 16px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-dk));
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  font-size: 1rem;
+  font-weight: 800;
+  font-family: var(--font-mono);
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: opacity var(--transition), transform 0.15s ease;
+}
+
+.btn-finalizar:hover:not(:disabled) {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+.btn-finalizar:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.payment-note {
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 12px;
+}
+
+/* ============================
+   MODAL DE CLIENTES
+   ============================ */
+.client-list-modal {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 300px;
+  overflow-y: auto;
+  margin-top: 12px;
+}
+
+.client-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  transition: all var(--transition);
+}
+
+.client-option:hover {
+  border-color: var(--accent);
+}
+
+.client-option.selected {
+  border-color: var(--accent);
+  background-color: rgba(26, 188, 156, 0.08);
+}
+
+.client-option .material-icons {
+  font-size: 28px;
+  color: var(--accent);
+}
+
+.client-option-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.client-option-name {
+  font-weight: 600;
+  font-size: 0.88rem;
+  color: var(--text-dark);
+}
+
+.client-option-id {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+/* ============================
+   RESPONSIVE
+   ============================ */
+@media (max-width: 1024px) {
+  .ventas-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .payment-panel {
+    position: static;
+  }
+}

@@ -1,0 +1,34 @@
+$kind: http-request
+url: "{{baseUrl}}/errores"
+method: GET
+headers:
+  Authorization: Bearer {{token}}
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.sendRequest({
+          url: pm.collectionVariables.get('baseUrl') + '/errores?resuelto=false',
+          method: 'GET',
+          header: { Authorization: 'Bearer ' + pm.collectionVariables.get('token') }
+      }, function (err, res) {
+          const lista = res.json();
+          if (lista.errores && lista.errores.length > 0) {
+              pm.collectionVariables.set('errorId', lista.errores[0].id);
+              pm.sendRequest({
+                  url: pm.collectionVariables.get('baseUrl') + '/errores/' + lista.errores[0].id + '/resolver',
+                  method: 'PATCH',
+                  header: { Authorization: 'Bearer ' + pm.collectionVariables.get('token') }
+              }, function (err2, res2) {
+                  pm.test('Error marcado como resuelto', function () {
+                      pm.expect(res2.code).to.eql(200);
+                      pm.expect(res2.json().success).to.be.true;
+                  });
+              });
+          } else {
+              pm.test('Sin errores pendientes (skip)', function () {
+                  pm.expect(true).to.be.true;
+              });
+          }
+      });
+    language: text/javascript
+order: 3000

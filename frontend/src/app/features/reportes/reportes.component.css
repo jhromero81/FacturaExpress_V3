@@ -1,0 +1,377 @@
+/**
+ * features/reportes/reportes.component.css
+ * Estilos de reportes: KPIs con borde lateral, grafico comparativo,
+ * productos top y meta de ventas (reemplaza Reportes.css).
+ */
+
+/* ============================
+   KPIs DEL REPORTE
+   ============================ */
+.report-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.report-kpi {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--accent);
+  border-radius: 12px;
+  padding: 18px 20px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  transition: all var(--transition);
+}
+
+.report-kpi:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.report-kpi-icon {
+  color: var(--accent);
+  font-size: 28px;
+}
+
+.report-kpi-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.report-kpi-value {
+  font-size: 1.3rem;
+  font-weight: 800;
+  color: var(--text-dark);
+}
+
+.report-kpi-label {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+/* ============================
+   TOOLBAR DE REPORTES
+   ============================ */
+.reportes-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+  gap: 12px;
+}
+
+.reportes-toolbar .btn-outline-accent {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 38px;
+  padding: 0 18px;
+  background: transparent;
+  color: var(--accent);
+  border: 1.5px solid var(--accent);
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.reportes-toolbar .btn-outline-accent:hover:not(:disabled) {
+  background-color: rgba(26, 188, 156, 0.08);
+}
+
+.reportes-toolbar .btn-outline-accent:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.reportes-toolbar .material-icons {
+  font-size: 18px;
+}
+
+.reportes-toolbar .filter-group:first-child {
+  margin-right: auto;
+}
+
+/* ============================
+   CONTENIDO PRINCIPAL
+   ============================ */
+.reportes-content {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 24px;
+  align-items: start;
+}
+
+.card-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-dark);
+  margin-bottom: 20px;
+}
+
+/* ============================
+   GRAFICO DE BARRAS
+   ============================ */
+.bar-chart {
+  width: 100%;
+  height: auto;
+}
+
+.chart-container {
+  position: relative;
+}
+
+.chart-bar-group {
+  cursor: pointer;
+}
+
+.chart-bar-group:hover .bar-rect {
+  opacity: 0.85;
+}
+
+.bar-rect {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: growBarReporte 0.5s ease-out both;
+  transition: opacity var(--transition);
+}
+
+@keyframes growBarReporte {
+  from {
+    transform: scaleY(0);
+    opacity: 0.4;
+  }
+  to {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}
+
+.chart-day-label {
+  font-size: 11px;
+  fill: var(--text-muted);
+  font-family: var(--font-body);
+  font-weight: 600;
+}
+
+.chart-value-label {
+  font-size: 9px;
+  font-weight: 600;
+  fill: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.chart-tooltip {
+  position: absolute;
+  pointer-events: none;
+  transform: translate(-50%, -115%);
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow-md);
+  padding: 10px 12px;
+  z-index: 20;
+  min-width: 190px;
+}
+
+.chart-tooltip-title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-dark);
+  margin-bottom: 8px;
+}
+
+.chart-tooltip-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+  white-space: nowrap;
+}
+
+.chart-tooltip-row strong {
+  color: var(--text-dark);
+}
+
+.chart-tooltip-hint {
+  margin-top: 6px;
+  font-size: 0.7rem;
+  color: var(--accent);
+  text-align: center;
+  border-top: 1px solid var(--border);
+  padding-top: 6px;
+}
+
+/* Detalle de periodo (modal) */
+.report-detail-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.report-detail-block {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.report-detail-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.report-detail-value {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-dark);
+}
+
+.report-detail-sub {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+.report-detail-variation {
+  margin-top: 16px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  text-align: right;
+}
+
+.report-detail-variation strong {
+  color: var(--accent);
+}
+
+.chart-legend {
+  display: flex;
+  gap: 24px;
+  margin-top: 16px;
+  justify-content: center;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+/* ============================
+   SIDEBAR DE REPORTES
+   ============================ */
+.reportes-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.top-products {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.top-product-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  transition: border-color var(--transition);
+}
+
+.top-product-item:hover {
+  border-color: var(--accent);
+}
+
+.product-rank {
+  font-family: var(--font-mono);
+  font-weight: 800;
+  color: var(--accent);
+  font-size: 1rem;
+  min-width: 30px;
+}
+
+.product-details {
+  display: flex;
+  flex-direction: column;
+}
+
+.product-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-dark);
+}
+
+.product-sold {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+/* Meta de ventas */
+.sales-goal {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.goal-progress-text {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.goal-percent {
+  font-size: 1.3rem;
+  font-weight: 800;
+  color: var(--accent);
+}
+
+.goal-target {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.goal-remaining {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* ============================
+   RESPONSIVE
+   ============================ */
+@media (max-width: 1024px) {
+  .report-kpi-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .reportes-content {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .report-kpi-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .reportes-toolbar {
+    flex-direction: column;
+    gap: 12px;
+    align-items: stretch;
+  }
+}

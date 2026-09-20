@@ -1,0 +1,14 @@
+$kind: http-request
+url: "{{baseUrl}}/reportes/historial"
+method: GET
+headers:
+  Authorization: Bearer {{token}}
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Historial de reportes (HTTP 200)', function () {
+          pm.response.to.have.status(200);
+          pm.expect(pm.response.json().reportes).to.be.an('array');
+      });
+    language: text/javascript
+order: 4000

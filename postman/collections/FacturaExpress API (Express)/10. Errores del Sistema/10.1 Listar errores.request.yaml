@@ -1,0 +1,16 @@
+$kind: http-request
+url: "{{baseUrl}}/errores"
+method: GET
+headers:
+  Authorization: Bearer {{token}}
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Listado de errores (HTTP 200)', function () {
+          pm.response.to.have.status(200);
+          const json = pm.response.json();
+          pm.expect(json.errores).to.be.an('array');
+          pm.expect(json.noResueltos).to.be.a('number');
+      });
+    language: text/javascript
+order: 1000

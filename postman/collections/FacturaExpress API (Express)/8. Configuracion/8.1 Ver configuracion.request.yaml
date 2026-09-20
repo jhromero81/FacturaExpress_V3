@@ -1,0 +1,15 @@
+$kind: http-request
+url: "{{baseUrl}}/configuracion"
+method: GET
+headers:
+  Authorization: Bearer {{token}}
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Configuracion de empresa (HTTP 200)', function () {
+          pm.response.to.have.status(200);
+          const json = pm.response.json();
+          pm.expect(json.configuracion.empresa.nit).to.be.a('string');
+      });
+    language: text/javascript
+order: 1000

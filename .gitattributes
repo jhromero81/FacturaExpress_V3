@@ -1,0 +1,7 @@
+# Normaliza los finales de linea a LF en todos los archivos de texto
+# (compatibilidad Windows/Linux); los binarios se conservan intactos.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.pdf binary
+*.zip binary

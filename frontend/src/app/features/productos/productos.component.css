@@ -1,0 +1,105 @@
+/**
+ * features/productos/productos.component.css
+ * Estilos del inventario de productos (reemplaza Productos.css).
+ * Las clases compartidas viven en los estilos globales.
+ */
+
+.productos-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.productos-toolbar .btn-teal {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 20px;
+  white-space: nowrap;
+  background-color: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.productos-toolbar .btn-teal:hover {
+  background-color: var(--accent-dk);
+}
+
+.productos-toolbar .material-icons {
+  font-size: 18px;
+}
+
+.product-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.action-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  border: 1.5px solid var(--border);
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-dark);
+  transition: all var(--transition);
+}
+
+.action-btn .material-icons {
+  font-size: 18px;
+}
+
+.action-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.action-btn.danger:hover {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.stock-badge {
+  display: inline-block;
+  padding: 2px 12px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  background-color: rgba(39, 174, 96, 0.12);
+  color: var(--success);
+}
+
+.stock-badge.low {
+  background-color: rgba(231, 76, 60, 0.12);
+  color: var(--danger);
+}
+
+.stock-current {
+  margin-bottom: 16px;
+  color: var(--text-muted);
+}
+
+@media (max-width: 768px) {
+  .productos-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .productos-toolbar .search-wrapper {
+    min-width: auto;
+  }
+}
