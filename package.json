@@ -14,7 +14,10 @@
     "db:migrate": "npm run db:migrate --prefix backend",
     "db:seed": "npm run db:seed --prefix backend",
     "build": "npm run build --prefix frontend",
-    "test": "npm test --prefix backend && npm test --prefix frontend"
+    "test": "npm test --prefix backend && npm test --prefix frontend",
+    "test:backend": "npm test --prefix backend",
+    "test:frontend": "npm test --prefix frontend",
+    "test:e2e": "npm run test:e2e --prefix backend"
   },
   "devDependencies": {
     "concurrently": "^9.2.1"

@@ -10,7 +10,10 @@
     "db:setup": "node scripts/setupDb.js",
     "db:seed": "node scripts/seed.js",
     "db:migrate": "node scripts/migrate.js",
-    "test": "node --test"
+    "test": "node --test",
+    "test:unit": "node --test test/*.test.js",
+    "test:integracion": "node --test test/integracion/*.test.js",
+    "test:e2e": "node scripts/pruebas-aceptacion.js"
   },
   "keywords": [
     "facturaexpress",
