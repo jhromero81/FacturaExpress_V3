@@ -23,14 +23,26 @@ const {
 
 dotenv.config();
 
-/** Configuracion de conexion tomada de las variables de entorno */
+/** Nombre de la base de datos (configurable por entorno) */
+const DB_NAME = process.env.DB_NAME || 'facturaexpress_apirest';
+
+/** Indica que la base de datos ya existe (servicio MySQL de CI o contenedor) */
+const omitirCreacionBd = process.env.DB_SKIP_CREATE === '1';
+
+/**
+ * Configuracion de conexion tomada de las variables de entorno.
+ *
+ * Cuando la base ya existe (DB_SKIP_CREATE=1: servicio MySQL de CI o
+ * contenedor de docker-compose) se selecciona al conectar, porque el
+ * esquema no ejecuta CREATE DATABASE ni USE. Si la base no existe, la
+ * conexion va sin "database" y es schema.sql quien la crea y la usa.
+ */
 const dbConfig = {
   host: process.env.DB_HOST || 'localhost',
   port: Number(process.env.DB_PORT || 3306),
   user: process.env.DB_USER || 'root',
   password: process.env.DB_PASSWORD || '',
-  // No se conecta directamente a la base de datos porque puede
-  // no existir aun; el esquema (schema.sql) la crea e invoca USE.
+  ...(omitirCreacionBd ? { database: DB_NAME } : {}),
   multipleStatements: true,
 };
 
@@ -44,8 +56,6 @@ async function ejecutarEsquema(connection) {
   const schemaPath = path.join(__dirname, '..', 'db', 'schema.sql');
   const schema = fs.readFileSync(schemaPath, 'utf8');
 
-  const omitirCreacionBd = process.env.DB_SKIP_CREATE === '1';
-
   let sentencias = schema
     .split(';')
     .map((s) => s.trim())
@@ -57,6 +67,11 @@ async function ejecutarEsquema(connection) {
     sentencias = sentencias.filter(
       (s) => !/^CREATE DATABASE|^USE /i.test(s.replace(/^--.*$/gm, '').trim())
     );
+
+    // schema.sql selecciona la base con USE; al omitirlo hay que hacerlo de
+    // forma explicita o las sentencias siguientes fallan con
+    // "No database selected" (Error 1046).
+    await connection.query(`USE \`${DB_NAME.replace(/`/g, '')}\``);
   }
 
   for (const sentencia of sentencias) {
