@@ -5,7 +5,7 @@
  * cantidad y panel de pago oscuro con descuento e IVA.
  */
 
-import { ChangeDetectorRef, Component, OnDestroy, inject } from '@angular/core';
+import { Component, OnDestroy, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { ApiService, mensajeError } from '../../core/api.service';
@@ -37,22 +37,22 @@ export class NuevaVentaComponent implements OnDestroy {
   private toast = inject(ToastService);
 
   /**
-   * Marca la vista tras las respuestas HTTP. En Angular 22 el ciclo de
-   * deteccion solo revisa las vistas marcadas como sucias: mutar propiedades
-   * planas en un callback asincrono no marca la vista, de modo que el
-   * catalogo se quedaba en "Cargando..." con los datos ya en memoria.
-   * markForCheck() marca la vista y ademas programa el ciclo de deteccion.
+   * Estado de la vista como senales. Angular marca la vista cuando una senal
+   * cambia, incluso dentro de un callback HTTP; con propiedades planas el
+   * ciclo de deteccion de Angular 22 no recompone la vista y el catalogo se
+   * quedaba en "Cargando..." con los datos ya en memoria.
+   *
+   * Los campos que solo cambian desde eventos de la plantilla (busquedas y
+   * el modal de clientes) siguen siendo propiedades planas.
    */
-  private cdr = inject(ChangeDetectorRef);
+  readonly productos = signal<Producto[]>([]);
+  readonly clientes = signal<Cliente[]>([]);
+  readonly cart = signal<ItemCarrito[]>([]);
+  readonly cliente = signal<Cliente | null>(null);
 
-  productos: Producto[] = [];
-  clientes: Cliente[] = [];
-  cart: ItemCarrito[] = [];
-  cliente: Cliente | null = null;
-
-  loading = true;
-  errorCatalogo = false;
-  isFinalizing = false;
+  readonly loading = signal(true);
+  readonly errorCatalogo = signal(false);
+  readonly isFinalizing = signal(false);
   showClientModal = false;
   private pendienteCatalogo = 0;
   private falloCatalogo = false;
@@ -64,7 +64,9 @@ export class NuevaVentaComponent implements OnDestroy {
   clientNitSearch = '';
   clientNameSearch = '';
   clientModalSearch = '';
-  descuentoPct = 0;
+
+  /** Porcentaje de descuento (se edita desde la plantilla). */
+  readonly descuentoPct = signal(0);
 
   // Formateador expuesto a la plantilla
   money = formatMoney;
@@ -86,8 +88,8 @@ export class NuevaVentaComponent implements OnDestroy {
   /** Carga clientes y productos de forma independiente; el flag de
    *  carga solo se apaga cuando ambas peticiones completan. */
   cargarCatalogo(): void {
-    this.loading = true;
-    this.errorCatalogo = false;
+    this.loading.set(true);
+    this.errorCatalogo.set(false);
     this.pendienteCatalogo = 2;
     this.falloCatalogo = false;
 
@@ -100,9 +102,10 @@ export class NuevaVentaComponent implements OnDestroy {
       )
       .subscribe({
         next: (res) => {
-          this.clientes = res.clientes ?? [];
-          if (Number(res.total) > this.clientes.length) {
-            this.avisarTruncado('clientes', this.clientes.length, Number(res.total));
+          const clientes = res.clientes ?? [];
+          this.clientes.set(clientes);
+          if (Number(res.total) > clientes.length) {
+            this.avisarTruncado('clientes', clientes.length, Number(res.total));
           }
           this.restaurarPreseleccion();
         },
@@ -122,9 +125,10 @@ export class NuevaVentaComponent implements OnDestroy {
       )
       .subscribe({
         next: (res) => {
-          this.productos = res.productos ?? [];
-          if (Number(res.total) > this.productos.length) {
-            this.avisarTruncado('productos', this.productos.length, Number(res.total));
+          const productos = res.productos ?? [];
+          this.productos.set(productos);
+          if (Number(res.total) > productos.length) {
+            this.avisarTruncado('productos', productos.length, Number(res.total));
           }
         },
         error: (err) => {
@@ -150,9 +154,8 @@ export class NuevaVentaComponent implements OnDestroy {
   private cerrarCargarCatalogo(): void {
     this.pendienteCatalogo -= 1;
     if (this.pendienteCatalogo > 0) return;
-    this.errorCatalogo = this.falloCatalogo;
-    this.loading = false;
-    this.cdr.markForCheck();
+    this.errorCatalogo.set(this.falloCatalogo);
+    this.loading.set(false);
   }
 
   /** Restaura el cliente preseleccionado desde el modulo de clientes (un solo uso). */
@@ -161,8 +164,8 @@ export class NuevaVentaComponent implements OnDestroy {
       const crudo = sessionStorage.getItem(CLAVE_PRESELECCION);
       if (!crudo) return;
       const preseleccionado = JSON.parse(crudo) as Pick<Cliente, 'id'>;
-      const match = this.clientes.find((c) => c.id === preseleccionado.id);
-      if (match) this.cliente = match;
+      const match = this.clientes().find((c) => c.id === preseleccionado.id);
+      if (match) this.cliente.set(match);
       sessionStorage.removeItem(CLAVE_PRESELECCION);
     } catch {
       /* preseleccion invalida: se ignora */
@@ -171,11 +174,11 @@ export class NuevaVentaComponent implements OnDestroy {
 
   /** Totales de la venta */
   get subtotal(): number {
-    return this.cart.reduce((sum, item) => sum + item.precio * item.cantidad, 0);
+    return this.cart().reduce((sum, item) => sum + item.precio * item.cantidad, 0);
   }
 
   get montoDescuento(): number {
-    const pct = Math.min(Math.max(this.descuentoPct || 0, 0), 100);
+    const pct = Math.min(Math.max(this.descuentoPct() || 0, 0), 100);
     return Math.round(this.subtotal * (pct / 100));
   }
 
@@ -190,8 +193,8 @@ export class NuevaVentaComponent implements OnDestroy {
    * se cobraba de mas y el total mostrado no coincidia con la factura.
    */
   get iva(): number {
-    const factor = 1 - Math.min(Math.max(this.descuentoPct || 0, 0), 100) / 100;
-    return this.cart.reduce((sum, item) => {
+    const factor = 1 - Math.min(Math.max(this.descuentoPct() || 0, 0), 100) / 100;
+    return this.cart().reduce((sum, item) => {
       const baseLinea = Math.round(item.precio * item.cantidad * factor);
       return sum + calcularIVA(baseLinea, Number(item.iva));
     }, 0);
@@ -199,7 +202,7 @@ export class NuevaVentaComponent implements OnDestroy {
 
   /** Tarifas de IVA presentes en el carrito, para la etiqueta del panel. */
   get tarifasIva(): string {
-    const tarifas = [...new Set(this.cart.map((i) => Number(i.iva)))].sort((a, b) => a - b);
+    const tarifas = [...new Set(this.cart().map((i) => Number(i.iva)))].sort((a, b) => a - b);
     return tarifas.map((t) => `${Math.round(t * 100)}%`).join(' / ');
   }
 
@@ -213,42 +216,51 @@ export class NuevaVentaComponent implements OnDestroy {
       this.toast.mostrar('Stock insuficiente para agregar este producto', 'warning');
       return;
     }
-    const existing = this.cart.find((item) => item.id === producto.id);
-    if (existing) {
-      if (existing.cantidad >= producto.stock) {
-        this.toast.mostrar('Stock insuficiente para agregar mas unidades', 'warning');
-        return;
-      }
-      existing.cantidad += 1;
+    const existente = this.cart().find((item) => item.id === producto.id);
+    if (existente && existente.cantidad >= producto.stock) {
+      this.toast.mostrar('Stock insuficiente para agregar mas unidades', 'warning');
       return;
     }
-    this.cart.push({ ...producto, cantidad: 1 });
+    // Se reemplaza el arreglo (no se muta en sitio): una senal solo notifica
+    // el cambio si la referencia cambia.
+    this.cart.update((items) => {
+      const actual = items.find((item) => item.id === producto.id);
+      if (!actual) return [...items, { ...producto, cantidad: 1 }];
+      return items.map((item) =>
+        item.id === producto.id ? { ...item, cantidad: item.cantidad + 1 } : item
+      );
+    });
   }
 
   incrementQty(id: number): void {
-    const item = this.cart.find((i) => i.id === id);
+    const item = this.cart().find((i) => i.id === id);
     if (!item) return;
     if (item.cantidad >= item.stock) {
       this.toast.mostrar('Stock insuficiente para agregar mas unidades', 'warning');
       return;
     }
-    item.cantidad += 1;
+    this.cart.update((items) =>
+      items.map((i) => (i.id === id ? { ...i, cantidad: i.cantidad + 1 } : i))
+    );
   }
 
   decrementQty(id: number): void {
-    const item = this.cart.find((i) => i.id === id);
-    if (item && item.cantidad > 1) item.cantidad -= 1;
+    const item = this.cart().find((i) => i.id === id);
+    if (!item || item.cantidad <= 1) return;
+    this.cart.update((items) =>
+      items.map((i) => (i.id === id ? { ...i, cantidad: i.cantidad - 1 } : i))
+    );
   }
 
   removeFromCart(id: number): void {
-    this.cart = this.cart.filter((item) => item.id !== id);
+    this.cart.update((items) => items.filter((item) => item.id !== id));
   }
 
   /** Limpia la venta actual (carrito, cliente y descuento). */
   nuevaVenta(): void {
-    this.cart = [];
-    this.cliente = null;
-    this.descuentoPct = 0;
+    this.cart.set([]);
+    this.cliente.set(null);
+    this.descuentoPct.set(0);
   }
 
   /**
@@ -260,10 +272,7 @@ export class NuevaVentaComponent implements OnDestroy {
     this.api
       .get<{ success: boolean; productos: Producto[] }>(`/productos?limite=${LIMITE_CATALOGO}`)
       .subscribe({
-        next: (res) => {
-          this.productos = res.productos ?? [];
-          this.cdr.markForCheck();
-        },
+        next: (res) => this.productos.set(res.productos ?? []),
         // El refresco es best-effort: si falla, la venta ya esta registrada.
         error: () => undefined,
       });
@@ -271,31 +280,31 @@ export class NuevaVentaComponent implements OnDestroy {
 
   /** Finaliza la venta generando la factura electronica en el backend. */
   finalizeSale(): void {
-    if (this.cart.length === 0) {
+    if (this.cart().length === 0) {
       this.toast.mostrar('Agregue al menos un producto para finalizar la venta', 'warning');
       return;
     }
-    if (!this.cliente) {
+    const cliente = this.cliente();
+    if (!cliente) {
       this.toast.mostrar('Seleccione un cliente para la venta', 'warning');
       return;
     }
 
-    this.isFinalizing = true;
+    this.isFinalizing.set(true);
     this.api
       .post<{ success: boolean; factura: { numero: string } }>('/facturas', {
-        clienteId: this.cliente.id,
-        items: this.cart.map((item) => ({
+        clienteId: cliente.id,
+        items: this.cart().map((item) => ({
           productoId: item.id,
           cantidad: item.cantidad,
         })),
-        descuento: this.descuentoPct || 0,
+        descuento: this.descuentoPct() || 0,
       })
       .subscribe({
         next: (res) => {
           this.toast.mostrar(`Venta finalizada: ${res.factura.numero}`, 'success');
           this.nuevaVenta();
           this.refrescarStock();
-          this.cdr.markForCheck();
 
           if (this.temporizadorAviso !== null) clearTimeout(this.temporizadorAviso);
           this.temporizadorAviso = setTimeout(() => {
@@ -306,10 +315,7 @@ export class NuevaVentaComponent implements OnDestroy {
           }, 500);
         },
         error: (err) => this.toast.mostrar(mensajeError(err), 'error'),
-        complete: () => {
-          this.isFinalizing = false;
-          this.cdr.markForCheck();
-        },
+        complete: () => this.isFinalizing.set(false),
       });
   }
 
@@ -317,7 +323,7 @@ export class NuevaVentaComponent implements OnDestroy {
   get filteredProducts(): Producto[] {
     const term = this.searchTerm.trim().toLowerCase();
     if (!term) return [];
-    return this.productos.filter(
+    return this.productos().filter(
       (p) => p.nombre.toLowerCase().includes(term) || p.codigo.toLowerCase().includes(term)
     );
   }
@@ -326,27 +332,27 @@ export class NuevaVentaComponent implements OnDestroy {
   get filteredClientesNit(): Cliente[] {
     const term = this.clientNitSearch.trim().toLowerCase();
     if (!term) return [];
-    return this.clientes.filter((c) => c.identificacion.toLowerCase().includes(term));
+    return this.clientes().filter((c) => c.identificacion.toLowerCase().includes(term));
   }
 
   /** Clientes filtrados por nombre (autocompletado). */
   get filteredClientesNombre(): Cliente[] {
     const term = this.clientNameSearch.trim().toLowerCase();
     if (!term) return [];
-    return this.clientes.filter((c) => c.nombre.toLowerCase().includes(term));
+    return this.clientes().filter((c) => c.nombre.toLowerCase().includes(term));
   }
 
   /** Clientes del modal de seleccion (lista completa si no hay filtro). */
   get filteredModalClientes(): Cliente[] {
     const term = this.clientModalSearch.trim().toLowerCase();
-    if (!term) return this.clientes;
-    return this.clientes.filter(
+    if (!term) return this.clientes();
+    return this.clientes().filter(
       (c) => c.nombre.toLowerCase().includes(term) || c.identificacion.toLowerCase().includes(term)
     );
   }
 
   selectClient(c: Cliente): void {
-    this.cliente = c;
+    this.cliente.set(c);
     this.showClientModal = false;
   }
 }

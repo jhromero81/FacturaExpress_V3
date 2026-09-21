@@ -5,7 +5,7 @@
  * modulo de ventas preseleccionando el cliente.
  */
 
-import { ChangeDetectorRef, Component, OnDestroy, inject } from '@angular/core';
+import { Component, OnDestroy, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { ApiService, mensajeError } from '../../core/api.service';
 import { ToastService } from '../../core/toast.service';
@@ -41,26 +41,24 @@ export class ClientesComponent implements OnDestroy {
   private toast = inject(ToastService);
 
   /**
-   * Marca la vista tras las respuestas HTTP. En Angular 22 el ciclo de
-   * deteccion solo revisa las vistas marcadas como sucias: mutar propiedades
-   * planas en un callback asincrono no marca la vista y el listado se quedaba
-   * en "Cargando..." con los datos ya en memoria. markForCheck() marca la
-   * vista y ademas programa el ciclo de deteccion.
+   * Estado de la vista como senales. Angular marca la vista cuando una senal
+   * cambia, incluso dentro de un callback HTTP; con propiedades planas el
+   * ciclo de deteccion de Angular 22 no recompone la vista y el listado se
+   * quedaba en "Cargando..." con los datos ya en memoria.
    */
-  private cdr = inject(ChangeDetectorRef);
-
-  clientes: Cliente[] = [];
-  loading = true;
+  readonly clientes = signal<Cliente[]>([]);
+  readonly loading = signal(true);
 
   /** Paginacion resuelta por el servidor */
-  total = 0;
-  pagina = 1;
-  totalPaginas = 1;
+  readonly total = signal(0);
+  readonly pagina = signal(1);
+  readonly totalPaginas = signal(1);
 
+  /** Texto de busqueda (lo actualiza la plantilla, nunca un callback HTTP) */
   searchTerm = '';
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
-  showModal = false;
+  readonly showModal = signal(false);
   editingId: number | null = null;
   formData: FormCliente = { ...FORM_VACIO };
   errors: Errores = {};
@@ -84,9 +82,9 @@ export class ClientesComponent implements OnDestroy {
    * nunca en los resultados.
    */
   cargar(): void {
-    this.loading = true;
+    this.loading.set(true);
     const params = new URLSearchParams({
-      pagina: String(this.pagina),
+      pagina: String(this.pagina()),
       limite: String(LIMITE_PAGINA),
     });
     const termino = this.searchTerm.trim();
@@ -98,23 +96,21 @@ export class ClientesComponent implements OnDestroy {
       )
       .subscribe({
         next: (res) => {
-          this.clientes = res.clientes ?? [];
-          this.total = Number(res.total) || 0;
-          this.totalPaginas = Math.max(Number(res.totalPaginas) || 1, 1);
+          this.clientes.set(res.clientes ?? []);
+          this.total.set(Number(res.total) || 0);
+          this.totalPaginas.set(Math.max(Number(res.totalPaginas) || 1, 1));
           // Si la pagina solicitada quedo fuera de rango (por ejemplo tras
           // eliminar el ultimo registro), retroceder a la ultima existente.
-          if (this.pagina > this.totalPaginas) {
-            this.pagina = this.totalPaginas;
+          if (this.pagina() > this.totalPaginas()) {
+            this.pagina.set(this.totalPaginas());
             this.cargar();
             return;
           }
-          this.loading = false;
-          this.cdr.markForCheck();
+          this.loading.set(false);
         },
         error: (err) => {
           this.toast.mostrar(mensajeError(err), 'error');
-          this.loading = false;
-          this.cdr.markForCheck();
+          this.loading.set(false);
         },
       });
   }
@@ -125,15 +121,15 @@ export class ClientesComponent implements OnDestroy {
     if (this.debounceTimer !== null) clearTimeout(this.debounceTimer);
     this.debounceTimer = setTimeout(() => {
       this.debounceTimer = null;
-      this.pagina = 1;
+      this.pagina.set(1);
       this.cargar();
     }, 300);
   }
 
   /** Navega a una pagina concreta. */
   irAPagina(pagina: number): void {
-    if (pagina < 1 || pagina > this.totalPaginas || pagina === this.pagina) return;
-    this.pagina = pagina;
+    if (pagina < 1 || pagina > this.totalPaginas() || pagina === this.pagina()) return;
+    this.pagina.set(pagina);
     this.cargar();
   }
 
@@ -166,7 +162,7 @@ export class ClientesComponent implements OnDestroy {
         next: () => {
           this.toast.mostrar('Cliente registrado correctamente', 'success');
           this.cerrarModal();
-          this.pagina = 1;
+          this.pagina.set(1);
           this.cargar();
         },
         error: (err) => this.toast.mostrar(mensajeError(err), 'error'),
@@ -183,11 +179,19 @@ export class ClientesComponent implements OnDestroy {
       telefono: cliente.telefono || '',
     };
     this.errors = {};
-    this.showModal = true;
+    this.showModal.set(true);
+  }
+
+  /** Abre el modal en modo creacion (desde la plantilla). */
+  openCreate(): void {
+    this.editingId = null;
+    this.formData = { ...FORM_VACIO };
+    this.errors = {};
+    this.showModal.set(true);
   }
 
   cerrarModal(): void {
-    this.showModal = false;
+    this.showModal.set(false);
     this.editingId = null;
     this.formData = { ...FORM_VACIO };
     this.errors = {};

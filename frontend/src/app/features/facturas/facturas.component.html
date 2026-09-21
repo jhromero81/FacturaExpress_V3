@@ -52,14 +52,14 @@
         </tr>
       </thead>
       <tbody>
-        @if (loading) {
+        @if (loading()) {
           <tr>
             <td colspan="7" class="empty-table">
               <span class="material-icons">sync</span>
               <p>Cargando facturas...</p>
             </td>
           </tr>
-        } @else if (facturas.length === 0) {
+        } @else if (facturas().length === 0) {
           <tr>
             <td colspan="7" class="empty-table">
               <span class="material-icons">receipt_long</span>
@@ -67,7 +67,7 @@
             </td>
           </tr>
         } @else {
-          @for (factura of facturas; track factura.id) {
+          @for (factura of facturas(); track factura.id) {
             <tr>
               <td class="font-mono">{{ factura.numero }}</td>
               <td>{{ date(factura.fecha) }}</td>
@@ -115,15 +115,15 @@
     </table>
 
     <!-- Paginacion -->
-    @if (totalPages > 1) {
+    @if (totalPages() > 1) {
       <div class="pagination">
-        <button type="button" (click)="goToPage(currentPage - 1)" [disabled]="currentPage === 1">
+        <button type="button" (click)="goToPage(currentPage() - 1)" [disabled]="currentPage() === 1">
           <span class="material-icons">chevron_left</span>
         </button>
         <span class="page-info">
-          Pagina {{ currentPage }} de {{ totalPages }}
+          Pagina {{ currentPage() }} de {{ totalPages() }}
         </span>
-        <button type="button" (click)="goToPage(currentPage + 1)" [disabled]="currentPage === totalPages">
+        <button type="button" (click)="goToPage(currentPage() + 1)" [disabled]="currentPage() === totalPages()">
           <span class="material-icons">chevron_right</span>
         </button>
       </div>
@@ -131,14 +131,14 @@
   </div>
 
   <!-- Modal de detalle de factura -->
-  @if (selected; as sel) {
+  @if (selected(); as sel) {
     <div class="modal-overlay open" (click)="closeDetail()">
       <div class="modal-content modal-wide" (click)="$event.stopPropagation()">
         <div class="modal-header">
           <h3>Factura {{ sel.numero }}</h3>
         </div>
         <div class="modal-body">
-          @if (detailLoading) {
+          @if (detailLoading()) {
             <div class="empty-state">
               <span class="material-icons">sync</span>
               <p>Cargando detalle...</p>

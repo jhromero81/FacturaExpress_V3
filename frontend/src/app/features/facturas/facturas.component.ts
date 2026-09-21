@@ -5,7 +5,7 @@
  * (PDF/XML), cambio de estado y eliminacion de facturas pendientes.
  */
 
-import { ChangeDetectorRef, Component, inject } from '@angular/core';
+import { Component, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { ApiService, mensajeError } from '../../core/api.service';
@@ -48,29 +48,29 @@ export class FacturasComponent {
   private router = inject(Router);
   private toast = inject(ToastService);
 
-  /**
-   * Necesario para marcar la vista tras las respuestas HTTP. En Angular 22
-   * el ciclo de deteccion solo revisa las vistas marcadas como sucias y una
-   * mutacion de propiedades planas dentro de un callback asincrono no marca
-   * la vista, de modo que la tabla se quedaba en "Cargando facturas..." con
-   * los datos ya presentes en memoria. Las senales no lo necesitan porque
-   * marcan la vista por si mismas; markForCheck() ademas programa el ciclo.
-   */
-  private cdr = inject(ChangeDetectorRef);
-
+  /** Texto de busqueda (lo actualiza la plantilla, nunca un callback HTTP) */
   searchTerm = '';
-  currentPage = 1;
+
+  /** Filtro de estado DIAN activo (lo actualiza la plantilla) */
   statusFilter = 'todos';
   filtros = ['todos', 'pendiente', 'enviada', 'rechazada'];
 
-  facturas: Factura[] = [];
-  loading = true;
-  selected: Factura | null = null;
-  detailLoading = false;
+  /**
+   * Estado de la vista como senales. Angular marca la vista por si mismo
+   * cuando una senal cambia, incluso dentro de un callback HTTP; con
+   * propiedades planas el ciclo de deteccion de Angular 22 no recompone la
+   * vista y la tabla se quedaba en "Cargando facturas..." con los datos ya
+   * presentes en memoria.
+   */
+  readonly facturas = signal<Factura[]>([]);
+  readonly loading = signal(true);
+  readonly selected = signal<Factura | null>(null);
+  readonly detailLoading = signal(false);
 
   /** Paginacion resuelta por el servidor */
-  total = 0;
-  totalPages = 1;
+  readonly total = signal(0);
+  readonly totalPages = signal(1);
+  readonly currentPage = signal(1);
 
   /**
    * Identificador de la ultima peticion de detalle. Si el usuario abre dos
@@ -94,9 +94,9 @@ export class FacturasComponent {
    * no existian para la interfaz.
    */
   cargar(): void {
-    this.loading = true;
+    this.loading.set(true);
     const params = new URLSearchParams({
-      pagina: String(this.currentPage),
+      pagina: String(this.currentPage()),
       limite: String(ITEMS_PER_PAGE),
     });
     const termino = this.searchTerm.trim();
@@ -105,41 +105,39 @@ export class FacturasComponent {
 
     this.api.get<RespuestaFacturas>(`/facturas?${params.toString()}`).subscribe({
       next: (res) => {
-        this.facturas = res.facturas ?? [];
-        this.total = Number(res.total) || 0;
-        this.totalPages = Math.max(Number(res.totalPaginas) || 1, 1);
-        if (this.currentPage > this.totalPages) {
-          this.currentPage = this.totalPages;
+        this.facturas.set(res.facturas ?? []);
+        this.total.set(Number(res.total) || 0);
+        this.totalPages.set(Math.max(Number(res.totalPaginas) || 1, 1));
+        if (this.currentPage() > this.totalPages()) {
+          this.currentPage.set(this.totalPages());
           this.cargar();
           return;
         }
-        this.loading = false;
-        this.cdr.markForCheck();
+        this.loading.set(false);
       },
       error: (err) => {
         this.toast.mostrar(mensajeError(err), 'error');
-        this.loading = false;
-        this.cdr.markForCheck();
+        this.loading.set(false);
       },
     });
   }
 
   cambiarFiltro(filtro: string): void {
     this.statusFilter = filtro;
-    this.currentPage = 1;
+    this.currentPage.set(1);
     this.cargar();
   }
 
   onBuscar(valor: string): void {
     this.searchTerm = valor;
-    this.currentPage = 1;
+    this.currentPage.set(1);
     this.cargar();
   }
 
   goToPage(page: number): void {
-    const destino = Math.max(1, Math.min(page, this.totalPages));
-    if (destino === this.currentPage) return;
-    this.currentPage = destino;
+    const destino = Math.max(1, Math.min(page, this.totalPages()));
+    if (destino === this.currentPage()) return;
+    this.currentPage.set(destino);
     this.cargar();
   }
 
@@ -149,8 +147,8 @@ export class FacturasComponent {
 
   /** Abre el modal de detalle cargando la factura completa. */
   openDetail(factura: Factura): void {
-    this.selected = factura;
-    this.detailLoading = true;
+    this.selected.set(factura);
+    this.detailLoading.set(true);
     const solicitud = ++this.detalleSolicitado;
 
     this.api
@@ -158,15 +156,13 @@ export class FacturasComponent {
       .subscribe({
         next: (res) => {
           if (solicitud !== this.detalleSolicitado) return; // respuesta obsoleta
-          this.selected = res.factura;
-          this.detailLoading = false;
-          this.cdr.markForCheck();
+          this.selected.set(res.factura);
+          this.detailLoading.set(false);
         },
         error: (err) => {
           if (solicitud !== this.detalleSolicitado) return;
           this.toast.mostrar(mensajeError(err), 'error');
-          this.detailLoading = false;
-          this.cdr.markForCheck();
+          this.detailLoading.set(false);
         },
       });
   }
@@ -174,7 +170,7 @@ export class FacturasComponent {
   closeDetail(): void {
     // Invalida cualquier respuesta de detalle en vuelo.
     this.detalleSolicitado += 1;
-    this.selected = null;
+    this.selected.set(null);
   }
 
   /** Descarga el PDF generado por el backend. */
@@ -216,7 +212,7 @@ export class FacturasComponent {
     this.api.delete<{ success: boolean; message: string }>(`/facturas/${factura.id}`).subscribe({
       next: (res) => {
         this.toast.mostrar(res.message || 'Factura eliminada', 'success');
-        if (this.selected?.id === factura.id) this.selected = null;
+        if (this.selected()?.id === factura.id) this.selected.set(null);
         this.cargar();
       },
       error: (err) => this.toast.mostrar(mensajeError(err), 'error'),
@@ -233,7 +229,7 @@ export class FacturasComponent {
    * el historial completo.
    */
   async exportCSV(): Promise<void> {
-    if (this.total === 0) {
+    if (this.total() === 0) {
       this.toast.mostrar('No hay facturas para exportar', 'warning');
       return;
     }
@@ -301,7 +297,7 @@ export class FacturasComponent {
 
     this.toast.mostrar(
       truncado
-        ? `CSV exportado con ${filas.length} facturas (el filtro abarca ${this.total}; se aplico el tope de ${MAX_FILAS_EXPORT}).`
+        ? `CSV exportado con ${filas.length} facturas (el filtro abarca ${this.total()}; se aplico el tope de ${MAX_FILAS_EXPORT}).`
         : `CSV exportado con ${filas.length} facturas.`,
       truncado ? 'warning' : 'success'
     );

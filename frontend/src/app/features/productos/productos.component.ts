@@ -4,7 +4,7 @@
  * validaciones y ajuste de stock (suma/resta) via modal.
  */
 
-import { ChangeDetectorRef, Component, OnDestroy, inject } from '@angular/core';
+import { Component, OnDestroy, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiService, mensajeError } from '../../core/api.service';
 import { ToastService } from '../../core/toast.service';
@@ -44,31 +44,30 @@ export class ProductosComponent implements OnDestroy {
   private toast = inject(ToastService);
 
   /**
-   * Marca la vista tras las respuestas HTTP. En Angular 22 el ciclo de
-   * deteccion solo revisa las vistas marcadas como sucias: mutar propiedades
-   * planas en un callback asincrono no marca la vista y la tabla se quedaba
-   * en "Cargando..." con los datos ya en memoria. markForCheck() marca la
-   * vista y ademas programa el ciclo de deteccion.
+   * Estado de la vista como senales. Angular marca la vista cuando una senal
+   * cambia, incluso dentro de un callback HTTP; con propiedades planas el
+   * ciclo de deteccion de Angular 22 no recompone la vista y la tabla se
+   * quedaba en "Cargando..." con los datos ya en memoria.
    */
-  private cdr = inject(ChangeDetectorRef);
-
-  productos: Producto[] = [];
-  loading = true;
+  readonly productos = signal<Producto[]>([]);
+  readonly loading = signal(true);
 
   /** Paginacion resuelta por el servidor */
-  total = 0;
-  pagina = 1;
-  totalPaginas = 1;
+  readonly total = signal(0);
+  readonly pagina = signal(1);
+  readonly totalPaginas = signal(1);
 
+  /** Texto de busqueda (lo actualiza la plantilla, nunca un callback HTTP) */
   searchTerm = '';
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
-  showModal = false;
+  readonly showModal = signal(false);
   editingId: number | null = null;
   formData: FormProducto = { ...EMPTY_FORM };
   errors: Errores = {};
 
-  stockTarget: Producto | null = null;
+  readonly stockTarget = signal<Producto | null>(null);
+  /** Campo del modal de stock (enlace bidireccional con ngModel) */
   stockCantidad = 1;
 
   // Formateador expuesto a la plantilla
@@ -95,9 +94,9 @@ export class ProductosComponent implements OnDestroy {
    * restantes no aparecian ni en la tabla ni en la busqueda.
    */
   cargar(): void {
-    this.loading = true;
+    this.loading.set(true);
     const params = new URLSearchParams({
-      pagina: String(this.pagina),
+      pagina: String(this.pagina()),
       limite: String(LIMITE_PAGINA),
     });
     const termino = this.searchTerm.trim();
@@ -109,21 +108,19 @@ export class ProductosComponent implements OnDestroy {
       )
       .subscribe({
         next: (res) => {
-          this.productos = res.productos ?? [];
-          this.total = Number(res.total) || 0;
-          this.totalPaginas = Math.max(Number(res.totalPaginas) || 1, 1);
-          if (this.pagina > this.totalPaginas) {
-            this.pagina = this.totalPaginas;
+          this.productos.set(res.productos ?? []);
+          this.total.set(Number(res.total) || 0);
+          this.totalPaginas.set(Math.max(Number(res.totalPaginas) || 1, 1));
+          if (this.pagina() > this.totalPaginas()) {
+            this.pagina.set(this.totalPaginas());
             this.cargar();
             return;
           }
-          this.loading = false;
-          this.cdr.markForCheck();
+          this.loading.set(false);
         },
         error: (err) => {
           this.toast.mostrar(mensajeError(err), 'error');
-          this.loading = false;
-          this.cdr.markForCheck();
+          this.loading.set(false);
         },
       });
   }
@@ -134,15 +131,15 @@ export class ProductosComponent implements OnDestroy {
     if (this.debounceTimer !== null) clearTimeout(this.debounceTimer);
     this.debounceTimer = setTimeout(() => {
       this.debounceTimer = null;
-      this.pagina = 1;
+      this.pagina.set(1);
       this.cargar();
     }, 300);
   }
 
   /** Navega a una pagina concreta. */
   irAPagina(pagina: number): void {
-    if (pagina < 1 || pagina > this.totalPaginas || pagina === this.pagina) return;
-    this.pagina = pagina;
+    if (pagina < 1 || pagina > this.totalPaginas() || pagina === this.pagina()) return;
+    this.pagina.set(pagina);
     this.cargar();
   }
 
@@ -155,7 +152,7 @@ export class ProductosComponent implements OnDestroy {
     this.editingId = null;
     this.formData = { ...EMPTY_FORM };
     this.errors = {};
-    this.showModal = true;
+    this.showModal.set(true);
   }
 
   openEdit(producto: Producto): void {
@@ -168,11 +165,11 @@ export class ProductosComponent implements OnDestroy {
       stock: producto.stock,
     };
     this.errors = {};
-    this.showModal = true;
+    this.showModal.set(true);
   }
 
   cerrarModal(): void {
-    this.showModal = false;
+    this.showModal.set(false);
   }
 
   /** Guarda (crea o actualiza) un producto tras validar el formulario. */
@@ -197,7 +194,7 @@ export class ProductosComponent implements OnDestroy {
         .subscribe({
           next: () => {
             this.toast.mostrar('Producto actualizado correctamente', 'success');
-            this.showModal = false;
+            this.showModal.set(false);
             this.cargar();
           },
           error: (err) => this.toast.mostrar(mensajeError(err), 'error'),
@@ -206,8 +203,8 @@ export class ProductosComponent implements OnDestroy {
       this.api.post<{ success: boolean; producto: Producto }>('/productos', payload).subscribe({
         next: () => {
           this.toast.mostrar('Producto registrado correctamente', 'success');
-          this.showModal = false;
-          this.pagina = 1;
+          this.showModal.set(false);
+          this.pagina.set(1);
           this.cargar();
         },
         error: (err) => this.toast.mostrar(mensajeError(err), 'error'),
@@ -230,34 +227,35 @@ export class ProductosComponent implements OnDestroy {
 
   /** Aplica el ajuste de stock (positivo suma, negativo resta). */
   handleAdjustStock(): void {
-    if (!this.stockTarget) return;
+    const objetivo = this.stockTarget();
+    if (!objetivo) return;
     const cantidad = Number(this.stockCantidad);
     if (!Number.isInteger(cantidad) || cantidad === 0) {
       this.toast.mostrar('La cantidad debe ser un entero distinto de cero', 'warning');
       return;
     }
 
-    const objetivo = this.stockTarget;
     this.api
       .patch<{ success: boolean; producto: Producto }>(`/productos/${objetivo.id}/stock`, { cantidad })
       .subscribe({
         next: (res) => {
-          this.productos = this.productos.map((p) => (p.id === objetivo.id ? res.producto : p));
+          this.productos.update((lista) =>
+            lista.map((p) => (p.id === objetivo.id ? res.producto : p))
+          );
           this.cerrarStock();
           this.toast.mostrar(`Stock de "${objetivo.nombre}" ajustado`, 'success');
-          this.cdr.markForCheck();
         },
         error: (err) => this.toast.mostrar(mensajeError(err), 'error'),
       });
   }
 
   abrirStock(producto: Producto): void {
-    this.stockTarget = producto;
+    this.stockTarget.set(producto);
     this.stockCantidad = 1;
   }
 
   cerrarStock(): void {
-    this.stockTarget = null;
+    this.stockTarget.set(null);
     this.stockCantidad = 1;
   }
 }

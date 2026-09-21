@@ -598,20 +598,21 @@ La aplicación carga **Zone.js** (`polyfills` en `angular.json`) y configura
 **XHR** (`withXhr()`), cuyas tareas sí registra Zone.js.
 
 En Angular 22 el ciclo de detección solo vuelve a comprobar las vistas marcadas
-como **sucias**. Las **Signals** marcan la vista por sí mismas, por lo que los
-componentes que las usan (`dashboard`, `reportes`, `usuarios`, `errores`,
-`auditoria`, `backup`, `configuracion` y `layout`) se actualizan sin ayuda. Una
-**propiedad plana** mutada dentro de un callback asíncrono **no marca la vista**:
-el componente se quedaba mostrando "Cargando…" aunque la respuesta HTTP (`200`)
-ya hubiera llenado sus datos. Por eso los componentes que todavía usan propiedades
-planas (`facturas`, `ventas`, `productos`, `clientes` y `login`) inyectan
-`ChangeDetectorRef` y llaman a `markForCheck()` tras cada respuesta; este método
-marca la vista y además programa el ciclo de detección. No hace falta ningún
-servicio auxiliar de renderizado ni llamar a `ApplicationRef.tick()`.
+como **sucias**. Las **Signals** marcan la vista por sí mismas, también dentro de
+un callback HTTP, de modo que **todo el estado que se pinta en las plantillas se
+declara con `signal()`/`computed()`**. Una propiedad plana mutada de forma
+asíncrona no marca la vista: fue la causa de que las tablas de facturas y
+productos, las tarjetas de clientes, el catálogo del punto de venta y el ingreso
+se quedaran en "Cargando…" con los datos ya en memoria.
 
-> **Regla para código nuevo:** declarar con `signal()`/`computed()` el estado que
-> se pinta en la plantilla. Si se usa una propiedad plana que se actualiza desde
-> una respuesta HTTP, hay que llamar a `ChangeDetectorRef.markForCheck()`.
+Solo siguen siendo propiedades planas los campos que únicamente se editan desde
+eventos de la plantilla (los textos de búsqueda y la bandera del modal de
+selección de cliente). No se usa ningún servicio auxiliar de renderizado, ni
+`markForCheck()`, ni `ApplicationRef.tick()`.
+
+> **Regla para código nuevo:** declarar con `signal()` el estado que se pinta en
+> la plantilla. Si un valor se actualiza desde una respuesta HTTP, debe ser una
+> señal; una propiedad plana no refrescaría la vista.
 
 ### Búsqueda y paginación
 

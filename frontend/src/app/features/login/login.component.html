@@ -46,7 +46,7 @@
           name="nit"
           placeholder="NIT o Usuario"
           [(ngModel)]="nit"
-          [disabled]="isLoading"
+          [disabled]="isLoading()"
           autocomplete="username"
           autofocus
         />
@@ -60,7 +60,7 @@
           name="password"
           placeholder="Contrasena"
           [(ngModel)]="password"
-          [disabled]="isLoading"
+          [disabled]="isLoading()"
           autocomplete="current-password"
         />
         <button
@@ -73,13 +73,13 @@
       </div>
 
       <!-- Mensaje de error -->
-      @if (error) {
-        <div class="login-error">{{ error }}</div>
+      @if (error()) {
+        <div class="login-error">{{ error() }}</div>
       }
 
       <!-- Boton de iniciar sesion -->
-      <button class="login-btn" type="submit" [disabled]="isLoading">
-        @if (isLoading) {
+      <button class="login-btn" type="submit" [disabled]="isLoading()">
+        @if (isLoading()) {
           <span class="login-btn-loading">
             <span class="spinner"></span>
             Ingresando...

@@ -11,7 +11,7 @@
       />
     </div>
 
-    <button type="button" class="btn-teal" (click)="showModal = true">
+    <button type="button" class="btn-teal" (click)="openCreate()">
       <span class="material-icons">person_add</span>
       NUEVO CLIENTE
     </button>
@@ -19,18 +19,18 @@
 
   <!-- Grid de tarjetas de clientes -->
   <div class="clientes-grid">
-    @if (loading) {
+    @if (loading()) {
       <div class="empty-state">
         <span class="material-icons">sync</span>
         <p>Cargando clientes...</p>
       </div>
-    } @else if (clientes.length === 0) {
+    } @else if (clientes().length === 0) {
       <div class="empty-state">
         <span class="material-icons">group</span>
         <p>No se encontraron clientes</p>
       </div>
     } @else {
-      @for (cliente of clientes; track cliente.id) {
+      @for (cliente of clientes(); track cliente.id) {
         <div class="client-card">
           <div class="client-card-header">
             <span class="material-icons client-avatar">account_circle</span>
@@ -56,13 +56,13 @@
   </div>
 
   <!-- Paginacion resuelta por el servidor -->
-  @if (!loading && totalPaginas > 1) {
+  @if (!loading() && totalPaginas() > 1) {
     <div class="pagination-bar">
-      <button type="button" class="btn-pagina" [disabled]="pagina <= 1" (click)="irAPagina(pagina - 1)">
+      <button type="button" class="btn-pagina" [disabled]="pagina() <= 1" (click)="irAPagina(pagina() - 1)">
         <span class="material-icons">chevron_left</span>
       </button>
-      <span class="pagination-info font-mono">Pagina {{ pagina }} de {{ totalPaginas }} ({{ total }} clientes)</span>
-      <button type="button" class="btn-pagina" [disabled]="pagina >= totalPaginas" (click)="irAPagina(pagina + 1)">
+      <span class="pagination-info font-mono">Pagina {{ pagina() }} de {{ totalPaginas() }} ({{ total() }} clientes)</span>
+      <button type="button" class="btn-pagina" [disabled]="pagina() >= totalPaginas()" (click)="irAPagina(pagina() + 1)">
         <span class="material-icons">chevron_right</span>
       </button>
     </div>
@@ -71,7 +71,7 @@
   <!-- Modal de nuevo/editar cliente -->
   <div
     class="modal-overlay"
-    [class.open]="showModal"
+    [class.open]="showModal()"
     (click)="cerrarModal()"
   >
     <div class="modal-content" (click)="$event.stopPropagation()">
