@@ -130,14 +130,29 @@ test('con la huella correcta la restauracion supera las validaciones', async () 
   const checksum = backupService.calcularChecksum(contenido);
 
   // Las comprobaciones de formato y huella pasan; el fallo posterior es de
-  // conexion con MySQL (no hay servidor en el puerto por defecto de las
-  // pruebas), lo que demuestra que las defensas no rechazaron el archivo.
-  await assert.rejects(
-    () => backupService.restaurarBackup('valido.sql', checksum),
-    (error) => {
-      assert.notEqual(error.statusCode, 400, 'no debe rechazarse por formato o huella');
-      assert.notEqual(error.statusCode, 404, 'el archivo existe');
-      return true;
-    }
-  );
+  // conexion con MySQL, lo que demuestra que las defensas no rechazaron el
+  // archivo. El destino se apunta a un puerto sin servicio para que ese fallo
+  // sea determinista: antes se asumia que en la maquina no habia MySQL, de
+  // modo que en un equipo con el servidor levantado y credenciales validas la
+  // prueba ejecutaba una restauracion REAL contra esa base de datos.
+  const hostOriginal = process.env.DB_HOST;
+  const puertoOriginal = process.env.DB_PORT;
+  process.env.DB_HOST = '127.0.0.1';
+  process.env.DB_PORT = '1';
+
+  try {
+    await assert.rejects(
+      () => backupService.restaurarBackup('valido.sql', checksum),
+      (error) => {
+        assert.notEqual(error.statusCode, 400, 'no debe rechazarse por formato o huella');
+        assert.notEqual(error.statusCode, 404, 'el archivo existe');
+        return true;
+      }
+    );
+  } finally {
+    if (hostOriginal === undefined) delete process.env.DB_HOST;
+    else process.env.DB_HOST = hostOriginal;
+    if (puertoOriginal === undefined) delete process.env.DB_PORT;
+    else process.env.DB_PORT = puertoOriginal;
+  }
 });
