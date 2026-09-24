@@ -1,0 +1,23 @@
+$kind: http-request
+url: "{{baseUrl}}/facturas"
+method: POST
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{token}}
+body:
+  type: text
+  content: |-
+    {
+      "clienteId": 1,
+      "items": [
+        { "productoId": 1, "cantidad": 999999 }
+      ]
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Stock insuficiente rechazado (HTTP 409)', function () {
+          pm.response.to.have.status(409);
+      });
+    language: text/javascript
+order: 2000

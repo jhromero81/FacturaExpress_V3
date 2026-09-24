@@ -1,0 +1,18 @@
+$kind: http-request
+url: "{{baseUrl}}/facturas?limite=5"
+method: GET
+headers:
+  Authorization: Bearer {{token}}
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Listado de facturas (HTTP 200)', function () {
+          pm.response.to.have.status(200);
+      });
+      pm.test('Devuelve arreglo de facturas', function () {
+          const json = pm.response.json();
+          pm.expect(json.facturas).to.be.an('array');
+          pm.expect(json.total).to.be.above(0);
+      });
+    language: text/javascript
+order: 1000

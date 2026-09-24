@@ -9,6 +9,16 @@ const NIT_REGEX = /^\d{1,9}-\d{1}$/;
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_REGEX = /^\+?[\d\s\-()]{7,15}$/;
 
+/**
+ * Longitud minima de contrasena. Debe coincidir con la politica del
+ * backend (backend/config/password.js): antes la interfaz aceptaba 4
+ * caracteres y la API respondia 400 al guardar.
+ */
+export const MIN_PASSWORD = 8;
+
+/** Longitud maxima aceptada por el backend */
+export const MAX_PASSWORD = 72;
+
 export interface ResultadoCampo {
   valid: boolean;
   message: string;
@@ -51,6 +61,32 @@ export function validatePhone(phone?: string): ResultadoCampo {
 export function validateRequired(value: unknown, fieldName = 'Este campo'): ResultadoCampo {
   if (value === null || value === undefined || (typeof value === 'string' && value.trim() === '')) {
     return { valid: false, message: `${fieldName} es obligatorio.` };
+  }
+  return { valid: true, message: '' };
+}
+
+/**
+ * Valida una contrasena con la misma regla que aplica la API:
+ * minimo 8 caracteres e incluye minuscula, mayuscula y digito.
+ */
+export function validatePassword(password?: string): ResultadoCampo {
+  if (!password || password.length === 0) {
+    return { valid: false, message: 'La contrasena es obligatoria.' };
+  }
+  if (password.length < MIN_PASSWORD) {
+    return { valid: false, message: `La contrasena debe tener al menos ${MIN_PASSWORD} caracteres.` };
+  }
+  if (password.length > MAX_PASSWORD) {
+    return { valid: false, message: `La contrasena no puede superar ${MAX_PASSWORD} caracteres.` };
+  }
+  if (!/[a-z]/.test(password)) {
+    return { valid: false, message: 'La contrasena debe incluir una letra minuscula.' };
+  }
+  if (!/[A-Z]/.test(password)) {
+    return { valid: false, message: 'La contrasena debe incluir una letra mayuscula.' };
+  }
+  if (!/[0-9]/.test(password)) {
+    return { valid: false, message: 'La contrasena debe incluir un digito.' };
   }
   return { valid: true, message: '' };
 }
@@ -128,8 +164,9 @@ export function validateUsuario(
   const nombre = validateRequired(usuario.nombre, 'El nombre');
   if (!nombre.valid) errors['nombre'] = nombre.message;
 
-  if (requierePassword && (!usuario.password || usuario.password.length < 4)) {
-    errors['password'] = 'La contrasena debe tener al menos 4 caracteres.';
+  if (requierePassword) {
+    const password = validatePassword(usuario.password);
+    if (!password.valid) errors['password'] = password.message;
   }
 
   const email = validateEmail(usuario.email);

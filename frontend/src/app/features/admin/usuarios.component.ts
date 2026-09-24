@@ -5,7 +5,7 @@
  * activacion/desactivacion y eliminacion. Consume /api/usuarios.
  */
 
-import { Component, inject, OnInit, signal, ChangeDetectorRef } from '@angular/core';
+import { Component, inject, OnDestroy, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiService, mensajeError } from '../../core/api.service';
 import { AuthService } from '../../core/auth.service';
@@ -32,15 +32,13 @@ const USUARIO_VACIO: FormUsuario = { nit: '', nombre: '', email: '', telefono: '
   templateUrl: './usuarios.component.html',
   styleUrls: ['./usuarios.component.css'],
 })
-export class UsuariosComponent implements OnInit {
+export class UsuariosComponent implements OnInit, OnDestroy {
 
-  /** Vista activa para el refresco manual tras respuestas HTTP. */
-  readonly cdr = inject(ChangeDetectorRef);
   private api = inject(ApiService);
   readonly auth = inject(AuthService);
   private toast = inject(ToastService);
 
-  /** Lista completa de usuarios cargada una sola vez. */
+  /** Lista de usuarios (la API devuelve el directorio completo). */
   usuarios: Usuario[] = [];
   loading = signal(true);
 
@@ -48,6 +46,7 @@ export class UsuariosComponent implements OnInit {
   searchTerm = '';
   rolFilter = '';
   private debouncedSearch = '';
+  private debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
   /** Control del modal y formulario. */
   showModal = false;
@@ -58,7 +57,7 @@ export class UsuariosComponent implements OnInit {
   readonly perfiles = Object.values(PERFILES_USUARIO);
 
   ngOnInit(): void {
-    this.api.get<{ success: boolean; usuarios: Usuario[] }>('/usuarios?limite=200').subscribe({
+    this.api.get<{ success: boolean; usuarios: Usuario[] }>('/usuarios').subscribe({
       next: (res) => {
         this.usuarios = res.usuarios ?? [];
         this.loading.set(false);
@@ -70,6 +69,14 @@ export class UsuariosComponent implements OnInit {
     });
   }
 
+  /** Cancela el temporizador de busqueda pendiente al salir de la vista. */
+  ngOnDestroy(): void {
+    if (this.debounceTimer !== null) {
+      clearTimeout(this.debounceTimer);
+      this.debounceTimer = null;
+    }
+  }
+
   /** Nombre legible de un rol. */
   rolLabel(rol: string): string {
     const clave = rol?.toUpperCase();
@@ -78,7 +85,11 @@ export class UsuariosComponent implements OnInit {
 
   /** Filtra por busqueda (debounce manual) y rol en el cliente. */
   onSearchChange(): void {
-    setTimeout(() => {
+    // Se cancela el temporizador anterior: antes cada pulsacion programaba
+    // uno nuevo y todos se ejecutaban.
+    if (this.debounceTimer !== null) clearTimeout(this.debounceTimer);
+    this.debounceTimer = setTimeout(() => {
+      this.debounceTimer = null;
       this.debouncedSearch = this.searchTerm;
     }, 300);
   }

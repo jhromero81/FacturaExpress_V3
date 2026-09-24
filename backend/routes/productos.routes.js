@@ -12,7 +12,7 @@ const {
   adjustStock,
   deleteProducto,
 } = require('../controllers/productos.controller');
-const { authenticate } = require('../middleware/auth');
+const { authenticate, authorize } = require('../middleware/auth');
 const { validate } = require('../middleware/validate');
 const {
   productoBaseValidator,
@@ -23,14 +23,16 @@ const {
 
 const router = Router();
 
-// Todas las rutas de productos requieren autenticacion
+// Todas las rutas de productos requieren autenticacion. Segun la matriz
+// de permisos: catalogo de solo lectura para todos los roles y
+// alta/edicion/stock/baja exclusivos del administrador.
 router.use(authenticate);
 
 router.get('/', listProductos);
 router.get('/:id', idValidator, validate, getProducto);
-router.post('/', productoBaseValidator, validate, createProducto);
-router.put('/:id', idValidator, productoUpdateValidator, validate, updateProducto);
-router.patch('/:id/stock', ajusteStockValidator, validate, adjustStock);
-router.delete('/:id', idValidator, validate, deleteProducto);
+router.post('/', authorize('admin'), productoBaseValidator, validate, createProducto);
+router.put('/:id', authorize('admin'), idValidator, productoUpdateValidator, validate, updateProducto);
+router.patch('/:id/stock', authorize('admin'), ajusteStockValidator, validate, adjustStock);
+router.delete('/:id', authorize('admin'), idValidator, validate, deleteProducto);
 
 module.exports = router;

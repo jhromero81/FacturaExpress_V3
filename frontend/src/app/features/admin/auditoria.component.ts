@@ -4,7 +4,7 @@
  * por accion/usuario. Consume GET /api/logs.
  */
 
-import { Component, inject, signal, ChangeDetectorRef } from '@angular/core';
+import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiService, mensajeError } from '../../core/api.service';
 import { ToastService } from '../../core/toast.service';
@@ -31,7 +31,6 @@ interface LogAuditoria {
 export class AuditoriaComponent {
 
   /** Vista activa para el refresco manual tras respuestas HTTP. */
-  readonly cdr = inject(ChangeDetectorRef);
   private api = inject(ApiService);
   private toast = inject(ToastService);
 

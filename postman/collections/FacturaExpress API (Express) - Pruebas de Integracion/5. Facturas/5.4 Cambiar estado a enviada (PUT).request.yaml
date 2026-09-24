@@ -1,0 +1,26 @@
+$kind: http-request
+url: "{{baseUrl}}/facturas/{{facturaId}}/estado"
+method: PUT
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{token}}
+body:
+  type: text
+  content: |-
+    {
+      "estado": "enviada"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Estado de factura actualizado (HTTP 200)', function () {
+          pm.response.to.have.status(200);
+      });
+      pm.test('El nuevo estado DIAN queda persistido', function () {
+          const json = pm.response.json();
+          pm.expect(json.factura.estado).to.eql('enviada');
+          pm.expect(json.factura.firmaEstado).to.eql('firmada');
+          pm.expect(json.factura.intentosDian).to.be.above(0);
+      });
+    language: text/javascript
+order: 4000

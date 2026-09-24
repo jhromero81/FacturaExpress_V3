@@ -1,0 +1,18 @@
+$kind: http-request
+url: "{{baseUrl}}/reportes/ventas-periodo?periodo=mensual"
+method: GET
+headers:
+  Authorization: Bearer {{token}}
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Ventas por periodo (HTTP 200)', function () {
+          pm.response.to.have.status(200);
+      });
+      pm.test('Devuelve la serie comparativa', function () {
+          const json = pm.response.json();
+          pm.expect(json.periodo).to.eql('mensual');
+          pm.expect(json.ventas).to.be.an('array');
+      });
+    language: text/javascript
+order: 1000

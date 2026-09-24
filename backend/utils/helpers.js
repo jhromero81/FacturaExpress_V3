@@ -7,16 +7,21 @@
 
 const { pool } = require('../config/db');
 
-/** Tasa de IVA configurable (19% en Colombia) */
+/** Tasa de IVA por defecto (19% en Colombia) */
 const IVA_RATE = 0.19;
 
 /**
  * Calcula el IVA de un valor base redondeado a enteros.
+ * La tasa es parametrizable porque cada producto puede tributar una
+ * tarifa distinta (0%, 5% o 19% en Colombia); si se omite se usa la
+ * tarifa general.
  * @param {number} base - Valor base sin IVA.
+ * @param {number} [tasa=IVA_RATE] - Tarifa de IVA expresada en tanto por uno.
  * @returns {number} Monto de IVA calculado.
  */
-function calcularIVA(base) {
-  return Math.round(base * IVA_RATE);
+function calcularIVA(base, tasa = IVA_RATE) {
+  const tarifa = Number.isFinite(Number(tasa)) ? Number(tasa) : IVA_RATE;
+  return Math.round(Number(base || 0) * tarifa);
 }
 
 /** Nombre del advisory lock usado para serializar la numeracion. */
@@ -58,38 +63,52 @@ async function liberarLockNumeracion(connection) {
 }
 
 /**
- * Calcula el siguiente numero de factura del mes actual sobre una
+ * Reserva el siguiente numero de factura del mes actual sobre una
  * conexion concreta (debe ejecutarse bajo el lock de numeracion para
  * garantizar la exclusividad).
+ *
+ * El consecutivo se guarda en la tabla `secuencias_facturas`, no se
+ * deduce con COUNT(*) sobre las facturas existentes. Contar filas era
+ * incorrecto: al eliminar una factura el conteo bajaba y la siguiente
+ * venta intentaba reutilizar un numero ya emitido (error de clave
+ * duplicada) o reutilizaba un numero fiscal ya usado. Con una secuencia
+ * persistente el numero solo avanza.
+ *
+ * La sentencia INSERT ... ON DUPLICATE KEY UPDATE es atomica y bloquea
+ * la fila de la secuencia hasta el commit de la transaccion, de modo
+ * que dos ventas concurrentes nunca obtienen el mismo numero.
+ *
  * @param {object} connection - Conexion de mysql2.
- * @returns {Promise<string>} Numero generado.
+ * @param {string} [prefijo=prefijoFacturaMes()] - Prefijo del numero.
+ * @returns {Promise<string>} Numero generado (FAC-YYYYMM-XXXXX).
  */
-async function calcularSiguienteNumero(connection) {
-  const prefix = prefijoFacturaMes();
-
-  // Contar facturas emitidas en el mes actual
-  const [rows] = await connection.query(
-    `SELECT COUNT(*) AS total
-       FROM facturas
-      WHERE numero LIKE ?`,
-    [`${prefix}%`]
+async function calcularSiguienteNumero(connection, prefijo = prefijoFacturaMes()) {
+  await connection.query(
+    `INSERT INTO secuencias_facturas (prefijo, ultimo)
+     VALUES (?, 1)
+     ON DUPLICATE KEY UPDATE ultimo = ultimo + 1`,
+    [prefijo]
   );
 
-  const secuencia = Number(rows[0].total) + 1;
-  return `${prefix}${String(secuencia).padStart(5, '0')}`;
+  const [rows] = await connection.query(
+    'SELECT ultimo FROM secuencias_facturas WHERE prefijo = ?',
+    [prefijo]
+  );
+
+  const secuencia = Number(rows?.[0]?.ultimo) || 1;
+  return `${prefijo}${String(secuencia).padStart(5, '0')}`;
 }
 
 /**
  * Genera el numero secuencial de una factura con el formato
  * FAC-YYYYMM-XXXXX, donde XXXXX es la siguiente posicion de la
- * secuencia dentro del mes actual. Si no hay facturas en el mes,
- * la secuencia inicia en 1.
+ * secuencia persistente del mes actual (tabla secuencias_facturas).
  *
  * Usa un advisory lock de MySQL para evitar que dos ventas concurrentes
  * generen el mismo numero. Cuando se pasa una conexion de transaccion
  * (controllers), la numeracion queda protegida hasta el commit.
  *
- * @param {object} [connection=pool] - Conexion sobre la que contar y bloquear.
+ * @param {object} [connection=pool] - Conexion sobre la que reservar el numero.
  * @returns {Promise<string>} Numero de factura generado.
  */
 async function generateInvoiceNumber(connection = pool) {
@@ -239,16 +258,65 @@ function escapeXML(value) {
  * Escapa un valor para un archivo CSV (RFC 4180): se entrecomilla si
  * contiene comas, comillas dobles o saltos de linea, duplicando las
  * comillas internas.
+ *
+ * Ademas neutraliza la inyeccion de formulas (CSV injection): Excel y
+ * Google Sheets interpretan como formula toda celda que comience por
+ * `=`, `+`, `@`, tabulador o retorno de carro. Esos valores se prefijan
+ * con una comilla simple para que se traten como texto. Los numeros se
+ * exportan sin tocar: un signo menos inicial es un signo, no una formula.
+ *
  * @param {*} value - Valor a escapar.
  * @returns {string} Valor seguro para CSV.
  */
 function escapeCSV(value) {
   if (value === null || value === undefined) return '';
-  const str = String(value);
+  if (typeof value === 'number') return String(value);
+
+  let str = String(value);
+
+  // Un menos inicial solo es seguro si TODO el valor es un numero.
+  const esNumero = /^-?\d+(\.\d+)?$/.test(str);
+  if (!esNumero && (/^[=+@\t\r]/.test(str) || str.startsWith('-'))) {
+    str = `'${str}`;
+  }
+
   if (/[",\r\n]/.test(str)) {
     return `"${str.replace(/"/g, '""')}"`;
   }
   return str;
+}
+
+/**
+ * Escapa caracteres especiales de HTML. Se usa para interpolar datos de
+ * usuario (por ejemplo el nombre del cliente) en el cuerpo de un correo
+ * sin permitir inyeccion de marcado.
+ * @param {*} value - Valor a escapar.
+ * @returns {string} Texto seguro para HTML.
+ */
+function escapeHTML(value) {
+  if (value === null || value === undefined) return '';
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/**
+ * Normaliza un parametro de query string a texto. Express puede entregar
+ * un arreglo u objeto cuando el cliente repite la clave (`?q=a&q=b`) o
+ * usa la sintaxis extendida (`?q[]=x`); sin esta coercion los
+ * controladores llamarian a .trim() sobre un no-string y responderian
+ * 500. Ante un valor no textual se devuelve el valor por defecto.
+ * @param {*} valor - Valor crudo del query string.
+ * @param {string} [defecto=''] - Valor devuelto cuando no es texto.
+ * @returns {string} Texto seguro.
+ */
+function asString(valor, defecto = '') {
+  if (typeof valor === 'string') return valor;
+  if (typeof valor === 'number' && Number.isFinite(valor)) return String(valor);
+  return defecto;
 }
 
 module.exports = {
@@ -258,11 +326,14 @@ module.exports = {
   adquirirLockNumeracion,
   liberarLockNumeracion,
   calcularSiguienteNumero,
+  prefijoFacturaMes,
   clampInt,
   isValidPositiveInt,
   isRequiredString,
   escapeXML,
   escapeCSV,
+  escapeHTML,
+  asString,
   mapItemRow,
   mapFacturaRow,
   mapClienteRow,

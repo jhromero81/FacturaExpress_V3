@@ -13,12 +13,44 @@ dotenv.config();
 
 const NODE_ENV = process.env.NODE_ENV || 'development';
 
-// En produccion el secreto es obligatorio: un valor por defecto conocido
-// permitia falsificar tokens. La API se detiene si no esta configurado.
-if (NODE_ENV === 'production' && !process.env.JWT_SECRET) {
-  throw new Error(
-    '[security] JWT_SECRET es obligatorio en produccion. Definalo en las variables de entorno.'
-  );
+/** Valores de ejemplo que NUNCA deben usarse como secreto real */
+const SECRETOS_PLACEHOLDER = [
+  'cambia_este_secreto_por_una_cadena_aleatoria_larga',
+  'cambia_este_secreto',
+  'changeme',
+  'secret',
+  'secreto',
+  'jwt_secret',
+];
+
+/** Longitud minima exigida al secreto en produccion */
+const MIN_SECRETO_LARGO = 32;
+
+/**
+ * Valida el secreto JWT en produccion. Antes solo se comprobaba que la
+ * variable existiera, de modo que el valor de ejemplo del .env.example
+ * era aceptado literalmente y cualquiera podia firmar tokens validos.
+ * @param {string} secreto - Secreto configurado.
+ * @returns {string|null} Mensaje de error, o null si es aceptable.
+ */
+function validarSecreto(secreto) {
+  if (!secreto) {
+    return 'JWT_SECRET es obligatorio en produccion. Definalo en las variables de entorno.';
+  }
+  if (secreto.length < MIN_SECRETO_LARGO) {
+    return `JWT_SECRET debe tener al menos ${MIN_SECRETO_LARGO} caracteres en produccion.`;
+  }
+  if (SECRETOS_PLACEHOLDER.includes(secreto.trim().toLowerCase())) {
+    return 'JWT_SECRET conserva el valor de ejemplo. Genere uno aleatorio antes de desplegar.';
+  }
+  return null;
+}
+
+if (NODE_ENV === 'production') {
+  const errorSecreto = validarSecreto(process.env.JWT_SECRET);
+  if (errorSecreto) {
+    throw new Error(`[security] ${errorSecreto}`);
+  }
 }
 
 /**
@@ -37,6 +69,14 @@ if (!JWT_SECRET) {
 }
 /** Tiempo de expiracion del token (ej: 8h, 1d) */
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '8h';
+
+/**
+ * Emisor y audiencia del token. Estaban documentados en el .env.example
+ * pero el codigo nunca los leia ni los validaba, de modo que un token
+ * emitido para otro servicio con el mismo secreto era aceptado.
+ */
+const JWT_ISSUER = process.env.JWT_ISSUER || 'facturaexpress-api';
+const JWT_AUDIENCE = process.env.JWT_AUDIENCE || 'facturaexpress-web';
 
 /**
  * Convierte una duracion en formato corto (ej: '8h', '30m', '7d')
@@ -67,17 +107,29 @@ const COOKIE_MAX_AGE_MS = parseDurationToMs(JWT_EXPIRES_IN);
 function generateToken(payload) {
   return jwt.sign({ ...payload, jti: crypto.randomUUID() }, JWT_SECRET, {
     expiresIn: JWT_EXPIRES_IN,
+    issuer: JWT_ISSUER,
+    audience: JWT_AUDIENCE,
   });
 }
 
 /**
- * Verifica la firma y vigencia de un token JWT.
+ * Verifica la firma y vigencia de un token JWT, exigiendo ademas el
+ * emisor y la audiencia esperados.
  * @param {string} token - Token a validar.
  * @returns {object} Payload decodificado del token.
  * @throws {Error} Si el token es invalido o expiro.
  */
 function verifyToken(token) {
-  return jwt.verify(token, JWT_SECRET);
+  return jwt.verify(token, JWT_SECRET, {
+    issuer: JWT_ISSUER,
+    audience: JWT_AUDIENCE,
+  });
 }
 
-module.exports = { generateToken, verifyToken, COOKIE_MAX_AGE_MS };
+module.exports = {
+  generateToken,
+  verifyToken,
+  COOKIE_MAX_AGE_MS,
+  JWT_ISSUER,
+  JWT_AUDIENCE,
+};

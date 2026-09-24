@@ -1,0 +1,22 @@
+$kind: http-request
+name: 9.4 Desactivar / Reactivar usuario (PATCH)
+url: "{{baseUrl}}/usuarios/{{usuarioId}}/activo"
+method: PATCH
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{token}}
+body:
+  type: text
+  content: |-
+    {
+      "activo": false
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Usuario desactivado (HTTP 200)', function () {
+          pm.response.to.have.status(200);
+          pm.expect(pm.response.json().usuario.activo).to.be.false;
+      });
+    language: text/javascript
+order: 4000

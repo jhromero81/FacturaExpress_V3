@@ -68,13 +68,12 @@
       <div class="chart-container" #chartRef>
         <svg viewBox="0 0 600 280" class="bar-chart" (mouseleave)="cerrarTooltip()">
           <!-- Lineas de referencia -->
-          @for (i of [0, 1, 2, 3, 4]; track i) {
+          @for (i of lineasReferencia; track i) {
             <line x1="50" [attr.y1]="30 + i * 55" x2="570" [attr.y2]="30 + i * 55" stroke="var(--border)" stroke-width="1" />
           }
 
           <!-- Barras agrupadas -->
           @for (d of chartData; track d.key; let i = $index) {
-            @if (maxChartValue >= 0) {
               <g
                 class="chart-bar-group"
                 (mouseenter)="handleBarHover($event, d)"
@@ -135,7 +134,6 @@
                   {{ d.mes }}
                 </text>
               </g>
-            }
           }
         </svg>
 

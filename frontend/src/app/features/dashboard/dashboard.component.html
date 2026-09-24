@@ -13,10 +13,17 @@
       <div class="stat-card">
         <div class="stat-card-header">
           <span class="material-icons stat-icon">{{ kpi.icon }}</span>
-          <span class="stat-variacion" [class.positive]="kpi.variacion >= 0" [class.negative]="kpi.variacion < 0">
-            <span class="material-icons">{{ kpi.variacion >= 0 ? 'trending_up' : 'trending_down' }}</span>
-            {{ kpi.variacion >= 0 ? '' : '-' }}{{ Math.abs(kpi.variacion) }}%
-          </span>
+          @if (kpi.variacion !== null) {
+            <span
+              class="stat-variacion"
+              [class.positive]="kpi.variacion >= 0"
+              [class.negative]="kpi.variacion < 0"
+              [title]="kpi.baseComparacion ?? ''"
+            >
+              <span class="material-icons">{{ kpi.variacion >= 0 ? 'trending_up' : 'trending_down' }}</span>
+              {{ kpi.variacion >= 0 ? '+' : '' }}{{ kpi.variacion }}%
+            </span>
+          }
         </div>
         <div class="stat-value font-mono">{{ kpi.value }}</div>
         <div class="stat-label">{{ kpi.label }}</div>
@@ -39,13 +46,12 @@
           </defs>
 
           <!-- Lineas de referencia horizontales -->
-          @for (i of [0, 1, 2, 3, 4]; track i) {
+          @for (i of lineasReferencia; track i) {
             <line x1="40" [attr.y1]="30 + i * 45" x2="580" [attr.y2]="30 + i * 45" stroke="var(--border)" stroke-width="1" />
           }
 
           <!-- Barras del grafico -->
           @for (d of chartData; track d.key; let i = $index) {
-            @if (maxChartValue >= 0) {
               <g
                 class="chart-bar-group"
                 (mouseenter)="handleBarHover($event, d)"
@@ -90,7 +96,6 @@
                   {{ d.day }}
                 </text>
               </g>
-            }
           }
         </svg>
 

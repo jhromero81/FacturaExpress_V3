@@ -4,26 +4,42 @@
  * Genera volcados SQL de todas las tablas (sin depender de
  * mysqldump) y permite restaurarlos borrando y reinsertando
  * los datos con las claves foraneas desactivadas.
+ *
+ * Endurecimiento:
+ *  - El directorio y los archivos se crean con permisos restrictivos
+ *    (0700/0600): el volcado contiene hashes de contrasena de todos los
+ *    usuarios y antes quedaba legible por cualquier usuario del sistema.
+ *  - Cada respaldo registra la huella SHA-256 de su contenido y la
+ *    restauracion solo acepta un archivo cuya huella coincida con la
+ *    registrada al crearlo.
+ *  - Las credenciales de restauracion pueden ser distintas de las de
+ *    runtime (DB_RESTORE_USER / DB_RESTORE_PASSWORD).
  */
 
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const crypto = require('crypto');
 const mysql = require('mysql2/promise');
 const dotenv = require('dotenv');
 
 dotenv.config();
 
-/** Directorio donde se almacenan los respaldos */
-const BACKUP_DIR = path.join(os.tmpdir(), 'facturaexpress_backups');
+/** Directorio donde se almacenan los respaldos (configurable) */
+const BACKUP_DIR = process.env.BACKUP_DIR
+  ? path.resolve(process.env.BACKUP_DIR)
+  : path.join(os.tmpdir(), 'facturaexpress_backups');
+
+/** Cabecera que identifica un volcado generado por la aplicacion */
+const MARCA = '-- FacturaExpress - Respaldo de la base de datos';
 
 /**
- * Garantiza que el directorio de respaldos exista.
+ * Garantiza que el directorio de respaldos exista, con permisos 0700.
  * @returns {string} Ruta del directorio de respaldos.
  */
 function getBackupDir() {
   if (!fs.existsSync(BACKUP_DIR)) {
-    fs.mkdirSync(BACKUP_DIR, { recursive: true });
+    fs.mkdirSync(BACKUP_DIR, { recursive: true, mode: 0o700 });
   }
   return BACKUP_DIR;
 }
@@ -43,6 +59,15 @@ function getBackupPath(archivo) {
 }
 
 /**
+ * Calcula la huella SHA-256 de un contenido.
+ * @param {string} contenido - Contenido del respaldo.
+ * @returns {string} Hash en hexadecimal.
+ */
+function calcularChecksum(contenido) {
+  return crypto.createHash('sha256').update(contenido, 'utf8').digest('hex');
+}
+
+/**
  * Escapa un valor para incrustarlo en una sentencia INSERT.
  * @param {object} connection - Conexion MySQL.
  * @param {*} valor - Valor a escapar.
@@ -55,17 +80,40 @@ function escaparValor(connection, valor) {
 }
 
 /**
- * Genera un volcado SQL completo de la base de datos actual.
- * @returns {Promise<{archivo: string, tamano: number, ruta: string}>} Datos del respaldo creado.
+ * Construye la configuracion de conexion de runtime.
+ * @returns {object} Configuracion para mysql2.
  */
-async function crearBackup() {
-  const connection = await mysql.createConnection({
+function dbConfigRuntime() {
+  return {
     host: process.env.DB_HOST || 'localhost',
     port: Number(process.env.DB_PORT || 3306),
     user: process.env.DB_USER || 'root',
     password: process.env.DB_PASSWORD || '',
     database: process.env.DB_NAME || 'facturaexpress_apirest',
-  });
+  };
+}
+
+/**
+ * Construye la configuracion de conexion usada para restaurar. Usa las
+ * credenciales con privilegios DDL si estan definidas (una restauracion
+ * recrea tablas) y, si no, reutiliza las de runtime.
+ * @returns {object} Configuracion para mysql2.
+ */
+function dbConfigRestore() {
+  const config = dbConfigRuntime();
+  if (process.env.DB_RESTORE_USER) {
+    config.user = process.env.DB_RESTORE_USER;
+    config.password = process.env.DB_RESTORE_PASSWORD || '';
+  }
+  return config;
+}
+
+/**
+ * Genera un volcado SQL completo de la base de datos actual.
+ * @returns {Promise<{archivo: string, tamano: number, checksum: string, ruta: string}>} Datos del respaldo creado.
+ */
+async function crearBackup() {
+  const connection = await mysql.createConnection(dbConfigRuntime());
 
   try {
     const [tablas] = await connection.query(
@@ -114,13 +162,27 @@ async function crearBackup() {
     lineas.push('SET FOREIGN_KEY_CHECKS = 1;');
 
     const timestamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
-    const archivo = `backup_${timestamp}.sql`;
-    const ruta = path.join(getBackupDir(), archivo);
     const contenido = lineas.join('\n');
 
-    fs.writeFileSync(ruta, contenido, 'utf8');
+    // El nombre es unico: dos respaldos en el mismo segundo no se pisan.
+    let archivo = `backup_${timestamp}.sql`;
+    let ruta = path.join(getBackupDir(), archivo);
+    let sufijo = 1;
+    while (fs.existsSync(ruta)) {
+      archivo = `backup_${timestamp}_${sufijo}.sql`;
+      ruta = path.join(getBackupDir(), archivo);
+      sufijo += 1;
+    }
 
-    return { archivo, tamano: Buffer.byteLength(contenido, 'utf8'), ruta };
+    // mode 0600: el volcado contiene hashes de contrasena.
+    fs.writeFileSync(ruta, contenido, { encoding: 'utf8', mode: 0o600 });
+
+    return {
+      archivo,
+      tamano: Buffer.byteLength(contenido, 'utf8'),
+      checksum: calcularChecksum(contenido),
+      ruta,
+    };
   } finally {
     await connection.end();
   }
@@ -144,10 +206,17 @@ function listarBackups() {
 
 /**
  * Restaura la base de datos desde un archivo de respaldo.
+ *
+ * Solo acepta volcados generados por la aplicacion: el contenido debe
+ * empezar por la cabecera identificativa y, si se conoce la huella
+ * registrada al crearlo, debe coincidir exactamente. Asi un archivo
+ * ajeno colocado en el directorio no puede ejecutarse.
+ *
  * @param {string} archivo - Nombre del archivo de respaldo.
+ * @param {string|null} [checksumEsperado=null] - Huella registrada del respaldo.
  * @returns {Promise<boolean>} true si la restauracion fue exitosa.
  */
-async function restaurarBackup(archivo) {
+async function restaurarBackup(archivo, checksumEsperado = null) {
   const ruta = getBackupPath(archivo);
   if (!ruta) {
     const error = new Error(`El respaldo "${archivo}" no existe.`);
@@ -157,22 +226,27 @@ async function restaurarBackup(archivo) {
 
   const contenido = fs.readFileSync(ruta, 'utf8');
 
-  // Solo se restauran volcados generados por la aplicacion: la cabecera
-  // identifica el formato y evita ejecutar SQL arbitrario por error o por
-  // un archivo corrupto.
-  const MARCA = '-- FacturaExpress - Respaldo de la base de datos';
-  if (!contenido.includes(MARCA)) {
+  // La cabecera identificativa debe estar en el encabezado del archivo (el
+  // volcado comienza con una linea de separadores, por lo que no basta con
+  // comprobar el primer caracter ni con buscar la marca en cualquier parte).
+  const cabecera = contenido.slice(0, 500);
+  if (!cabecera.includes(MARCA)) {
     const error = new Error('El archivo no es un respaldo valido de FacturaExpress.');
     error.statusCode = 400;
     throw error;
   }
 
+  const checksumReal = calcularChecksum(contenido);
+  if (checksumEsperado && checksumReal !== checksumEsperado) {
+    const error = new Error(
+      'La huella del respaldo no coincide con la registrada: el archivo fue alterado.'
+    );
+    error.statusCode = 400;
+    throw error;
+  }
+
   const connection = await mysql.createConnection({
-    host: process.env.DB_HOST || 'localhost',
-    port: Number(process.env.DB_PORT || 3306),
-    user: process.env.DB_USER || 'root',
-    password: process.env.DB_PASSWORD || '',
-    database: process.env.DB_NAME || 'facturaexpress_apirest',
+    ...dbConfigRestore(),
     multipleStatements: true,
   });
 
@@ -180,6 +254,12 @@ async function restaurarBackup(archivo) {
     await connection.query('SET FOREIGN_KEY_CHECKS = 0');
     await connection.query(contenido);
     await connection.query('SET FOREIGN_KEY_CHECKS = 1');
+
+    // Las sesiones revocadas despues de tomar el respaldo volverian a ser
+    // validas al restaurar tokens_revocados. Se vacia la lista para forzar
+    // un nuevo inicio de sesion de todos los usuarios.
+    await connection.query('DELETE FROM tokens_revocados');
+
     return true;
   } finally {
     await connection.end();
@@ -203,8 +283,10 @@ function eliminarBackup(archivo) {
 }
 
 module.exports = {
+  BACKUP_DIR,
   getBackupDir,
   getBackupPath,
+  calcularChecksum,
   crearBackup,
   listarBackups,
   restaurarBackup,

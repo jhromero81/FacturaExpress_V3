@@ -4,50 +4,66 @@
  * Protege las rutas de la API: acepta el token en la cookie
  * httpOnly "token" (usada por el frontend) o en el encabezado
  * "Authorization: Bearer <token>" (usado por clientes externos).
+ *
+ * Ademas de la firma del token se revalida contra la base de datos que
+ * la cuenta siga existiendo, activa y con el mismo rol. El rol NO se
+ * toma del token: un administrador degradado conservaba el rol 'admin'
+ * durante toda la vigencia del token (hasta 8 h).
  */
 
 const { verifyToken } = require('../config/jwt');
 const { pool } = require('../config/db');
 
 /**
- * Cache temporal del estado "activo" por usuario. Sin este guard, un
+ * Cache temporal del estado de la cuenta por usuario. Sin este guard, un
  * usuario desactivado por el admin seguiria usando un token vigente hasta
  * su expiracion (hasta 8h). Con TTL corto (60s) el bloqueo surte efecto
  * casi de inmediato sin agregar una consulta SQL en cada peticion.
  */
-const CACHE_ACTIVO_TTL_MS = 60 * 1000;
-const CACHE_ACTIVO_MAX = 1000;
-// userId -> { activo: boolean, expira: number }
-const activoCache = new Map();
+const CACHE_USUARIO_TTL_MS = 60 * 1000;
+const CACHE_USUARIO_MAX = 1000;
+// userId -> { existe, activo, rol, expira }
+const usuarioCache = new Map();
 
 /**
- * Devuelve el estado "activo" en cache o null si no existe/maduro.
+ * Devuelve el estado en cache o null si no existe o expiro.
  * @param {number} userId - Identificador del usuario.
- * @returns {boolean|null}
+ * @returns {{existe: boolean, activo: boolean, rol: string|null}|null}
  */
-function leerActivoCache(userId) {
-  const registro = activoCache.get(userId);
+function leerUsuarioCache(userId) {
+  const registro = usuarioCache.get(userId);
   if (registro && registro.expira > Date.now()) {
-    return registro.activo;
+    return registro;
   }
   return null;
 }
 
 /**
- * Almacena el estado "activo" de un usuario con control de crecimiento
- * del cache (limpieza perezosa antes de descartar todo el cache).
+ * Almacena el estado de un usuario con control de crecimiento del cache
+ * (limpieza perezosa antes de descartar todo el cache).
  * @param {number} userId
- * @param {boolean} activo
+ * @param {{existe: boolean, activo: boolean, rol: string|null}} estado
  */
-function escribirActivoCache(userId, activo) {
-  if (activoCache.size >= CACHE_ACTIVO_MAX) {
+function escribirUsuarioCache(userId, estado) {
+  if (usuarioCache.size >= CACHE_USUARIO_MAX) {
     const ahora = Date.now();
-    for (const [k, v] of activoCache) {
-      if (v.expira <= ahora) activoCache.delete(k);
+    for (const [k, v] of usuarioCache) {
+      if (v.expira <= ahora) usuarioCache.delete(k);
     }
-    if (activoCache.size >= CACHE_ACTIVO_MAX) activoCache.clear();
+    if (usuarioCache.size >= CACHE_USUARIO_MAX) usuarioCache.clear();
   }
-  activoCache.set(userId, { activo, expira: Date.now() + CACHE_ACTIVO_TTL_MS });
+  usuarioCache.set(userId, { ...estado, expira: Date.now() + CACHE_USUARIO_TTL_MS });
+}
+
+/**
+ * Invalida el estado cacheado de un usuario. Se llama desde el modulo de
+ * administracion al cambiar el rol, activar/desactivar o eliminar una
+ * cuenta para que el cambio surta efecto de inmediato en lugar de
+ * esperar al TTL.
+ * @param {number|string} userId - Identificador del usuario.
+ */
+function invalidarCacheUsuario(userId) {
+  usuarioCache.delete(Number(userId));
 }
 
 /**
@@ -67,9 +83,10 @@ function getToken(req) {
 
 /**
  * Middleware de autenticacion.
- * Verifica la presencia y validez del token JWT en la peticion
- * y que no haya sido revocado (logout) consultando la tabla
- * tokens_revocados mediante su identificador unico (jti).
+ * Verifica la presencia y validez del token JWT en la peticion,
+ * que no haya sido revocado (logout) consultando la tabla
+ * tokens_revocados mediante su identificador unico (jti) y que la
+ * cuenta siga existiendo, activa y con su rol vigente.
  * Si es valido, adjunta el usuario autenticado en req.usuario.
  * @param {object} req - Objeto de peticion de Express.
  * @param {object} res - Objeto de respuesta de Express.
@@ -103,38 +120,61 @@ async function authenticate(req, res, next) {
       }
     }
 
-    // Verificar que el usuario siga existiendo y activo. El resultado se
-    // cachea 60s para no penalizar la latencia de cada peticion; un admin
-    // que desactive una cuenta verra el acceso en menos de un minuto.
-    if (payload.id) {
-      let sigueActivo = leerActivoCache(payload.id);
-      if (sigueActivo === null) {
-        try {
-          const [filas] = await pool.query(
-            'SELECT activo FROM usuarios WHERE id = ?',
-            [payload.id]
-          );
-          sigueActivo = filas.length > 0 && Boolean(filas[0].activo);
-        } catch {
-          // Ante una falla de conexion no bloquear sesiones criptograficamente validas
-          sigueActivo = true;
-        }
-        escribirActivoCache(payload.id, sigueActivo);
-      }
-      if (!sigueActivo) {
-        return res.status(403).json({
-          success: false,
-          message: 'El usuario se encuentra inactivo o fue eliminado.',
-        });
-      }
+    // Revalidar la cuenta contra la base de datos (existencia, estado
+    // activo y rol vigente), con cache de 60s para no penalizar la
+    // latencia de cada peticion.
+    if (!payload.id) {
+      return res.status(401).json({
+        success: false,
+        message: 'Token invalido o expirado.',
+      });
     }
 
-    // Adjuntar la identidad del usuario a la peticion
-    req.usuario = { id: payload.id, nit: payload.nit, rol: payload.rol };
+    let estado = leerUsuarioCache(payload.id);
+    if (estado === null) {
+      try {
+        const [filas] = await pool.query(
+          'SELECT activo, rol FROM usuarios WHERE id = ?',
+          [payload.id]
+        );
+        estado = filas.length > 0
+          ? { existe: true, activo: Boolean(filas[0].activo), rol: filas[0].rol }
+          : { existe: false, activo: false, rol: null };
+      } catch (error) {
+        // Ante una falla de conexion no bloquear sesiones criptograficamente
+        // validas, pero dejar constancia para poder diagnosticarlo.
+        console.warn(
+          `[auth] No fue posible revalidar la cuenta ${payload.id}: ${error.message}. ` +
+            'Se continua con la identidad del token.'
+        );
+        estado = { existe: true, activo: true, rol: payload.rol };
+      }
+      escribirUsuarioCache(payload.id, estado);
+    }
+
+    if (!estado.existe) {
+      return res.status(401).json({
+        success: false,
+        message: 'La cuenta ya no existe. Inicie sesion de nuevo.',
+      });
+    }
+    if (!estado.activo) {
+      // 401 y no 403: la sesion dejo de ser valida, de modo que el
+      // cliente limpia el estado local y vuelve al login (con 403 el
+      // usuario quedaba "atrapado" con una sesion que fallaba siempre).
+      return res.status(401).json({
+        success: false,
+        message: 'El usuario se encuentra inactivo o fue eliminado.',
+      });
+    }
+
+    // Adjuntar la identidad del usuario a la peticion. El rol procede de
+    // la base de datos, no del token.
+    req.usuario = { id: payload.id, nit: payload.nit, rol: estado.rol };
     // Datos del token crudo para acciones como la revocacion en logout
     req.tokenPayload = payload;
     return next();
-  } catch (error) {
+  } catch {
     return res.status(401).json({
       success: false,
       message: 'Token invalido o expirado.',
@@ -161,4 +201,4 @@ function authorize(...roles) {
   };
 }
 
-module.exports = { authenticate, authorize };
+module.exports = { authenticate, authorize, invalidarCacheUsuario };

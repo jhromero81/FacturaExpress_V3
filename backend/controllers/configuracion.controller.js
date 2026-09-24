@@ -9,6 +9,20 @@
 const { pool } = require('../config/db');
 const { asyncHandler, createHttpError } = require('../middleware/errorHandler');
 const { isRequiredString } = require('../utils/helpers');
+const { registrarAuditoria } = require('../utils/auditoria');
+
+/**
+ * Verifica que la fila unica de configuracion exista. Sin esta
+ * comprobacion, un UPDATE sobre una tabla vacia afectaba 0 filas y la
+ * lectura posterior de rows[0] provocaba un error 500.
+ * @returns {Promise<void>}
+ */
+async function exigirEmpresa() {
+  const [rows] = await pool.query('SELECT id FROM empresa WHERE id = 1');
+  if (rows.length === 0) {
+    throw createHttpError(404, 'Configuracion no encontrada. Ejecute el seed de datos.');
+  }
+}
 
 /**
  * GET /api/configuracion
@@ -52,6 +66,8 @@ const getConfiguracion = asyncHandler(async (req, res) => {
 const updateEmpresa = asyncHandler(async (req, res) => {
   const { nit, razonSocial, emailFacturacion, telefono } = req.body || {};
 
+  await exigirEmpresa();
+
   await pool.query(
     `UPDATE empresa
         SET nit               = COALESCE(?, nit),
@@ -66,6 +82,8 @@ const updateEmpresa = asyncHandler(async (req, res) => {
       telefono?.trim() || null,
     ]
   );
+
+  await registrarAuditoria(req, 'UPDATE configuracion empresa', 'empresa');
 
   const [rows] = await pool.query(
     'SELECT nit, razon_social, email_facturacion, telefono FROM empresa WHERE id = 1'
@@ -92,6 +110,8 @@ const updateEmpresa = asyncHandler(async (req, res) => {
 const updateFiscal = asyncHandler(async (req, res) => {
   const { resolucionDIAN, fechaExpiracionCert } = req.body || {};
 
+  await exigirEmpresa();
+
   await pool.query(
     `UPDATE empresa
         SET resolucion_dian       = COALESCE(?, resolucion_dian),
@@ -99,6 +119,8 @@ const updateFiscal = asyncHandler(async (req, res) => {
       WHERE id = 1`,
     [resolucionDIAN?.trim() || null, fechaExpiracionCert || null]
   );
+
+  await registrarAuditoria(req, 'UPDATE configuracion fiscal', 'empresa');
 
   const [rows] = await pool.query(
     'SELECT resolucion_dian, fecha_expiracion_cert FROM empresa WHERE id = 1'
@@ -121,9 +143,13 @@ const updateFiscal = asyncHandler(async (req, res) => {
  * de la ultima sincronizacion.
  */
 const syncDIAN = asyncHandler(async (req, res) => {
+  await exigirEmpresa();
+
   await pool.query(
     'UPDATE empresa SET ultima_sync = NOW() WHERE id = 1'
   );
+
+  await registrarAuditoria(req, 'SYNC DIAN', 'empresa');
 
   const [rows] = await pool.query(
     'SELECT ultima_sync FROM empresa WHERE id = 1'

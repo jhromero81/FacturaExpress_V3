@@ -1,23 +1,17 @@
 /**
  * app.ts
- * Componente raiz. Monta el router y registra la vista activa en el
- * ServicioRender; toda la interfaz vive en las rutas (login o layout
- * autenticado).
+ * Componente raiz. Monta el router; toda la interfaz vive en las rutas
+ * (login o layout autenticado). La deteccion de cambios la gestiona
+ * Zone.js (ver app.config.ts), por lo que no hace falta ningun puente
+ * manual entre el ciclo de vida de los componentes y el renderizado.
  */
 
-import { ChangeDetectorRef, Component, inject } from '@angular/core';
+import { Component } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
-import { ServicioRender } from './core/render.service';
 
 @Component({
   imports: [RouterOutlet],
   selector: 'app-root',
-  template: '<router-outlet (activate)="componenteActivado($event)" />',
+  template: '<router-outlet />',
 })
-export class App {
-  private readonly render = inject(ServicioRender);
-
-  componenteActivado(instancia: { cdr?: ChangeDetectorRef } | null): void {
-    this.render.establecerActivo(instancia?.cdr ?? null);
-  }
-}
+export class App {}

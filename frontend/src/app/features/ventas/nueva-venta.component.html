@@ -3,12 +3,12 @@
     <!-- Panel izquierdo: formulario de venta -->
     <div class="ventas-form-panel">
       <!-- Indicador de carga del catalogo -->
-      @if (loading) {
+      @if (loading()) {
         <div class="empty-state">
           <span class="material-icons">sync</span>
           <p>Cargando catalogo de productos y clientes...</p>
         </div>
-      } @else if (errorCatalogo) {
+      } @else if (errorCatalogo()) {
         <div class="empty-state">
           <span class="material-icons">cloud_off</span>
           <p>No fue posible cargar el catalogo de productos y clientes.</p>
@@ -18,11 +18,11 @@
 
       <!-- Botones de accion principal -->
       <div class="ventas-actions">
-        <button class="btn-teal" (click)="nuevaVenta()" [disabled]="loading">
+        <button class="btn-teal" (click)="nuevaVenta()" [disabled]="loading()">
           <span class="material-icons">add_shopping_cart</span>
           Nueva Venta
         </button>
-        <button class="btn-outline-accent" (click)="showClientModal = true" [disabled]="loading">
+        <button class="btn-outline-accent" (click)="showClientModal = true" [disabled]="loading()">
           <span class="material-icons">person_add</span>
           Cambiar Cliente
         </button>
@@ -86,7 +86,7 @@
       </div>
 
       <!-- Cliente seleccionado para la venta -->
-      @if (cliente; as cli) {
+      @if (cliente(); as cli) {
         <div class="ventas-client-info">
           <div class="form-group">
             <label>Cliente (NIT)</label>
@@ -141,7 +141,7 @@
             </tr>
           </thead>
           <tbody>
-            @if (cart.length === 0) {
+            @if (cart().length === 0) {
               <tr>
                 <td colspan="5" class="empty-cart">
                   <span class="material-icons">shopping_cart</span>
@@ -149,7 +149,7 @@
                 </td>
               </tr>
             } @else {
-              @for (item of cart; track item.id) {
+              @for (item of cart(); track item.id) {
                 <tr>
                   <td>
                     <div class="product-name-cell">
@@ -196,19 +196,19 @@
             min="0"
             max="100"
             step="1"
-            [value]="descuentoPct"
-            (input)="descuentoPct = Math.min(Math.max(+$any($event.target).value || 0, 0), 100)"
+            [value]="descuentoPct()"
+            (input)="descuentoPct.set(Math.min(Math.max(+$any($event.target).value || 0, 0), 100))"
             placeholder="0"
           />
         </div>
         @if (montoDescuento > 0) {
           <div class="payment-row discount">
-            <span>Descuento ({{ descuentoPct }}%)</span>
+            <span>Descuento ({{ descuentoPct() }}%)</span>
             <span class="font-mono">-{{ money(montoDescuento) }}</span>
           </div>
         }
         <div class="payment-row">
-          <span>IVA (19%)</span>
+          <span>IVA{{ tarifasIva ? ' (' + tarifasIva + ')' : '' }}</span>
           <span class="font-mono">{{ money(iva) }}</span>
         </div>
       </div>
@@ -220,8 +220,8 @@
         <span class="total-val font-mono">{{ money(total) }}</span>
       </div>
 
-      <button class="btn-finalizar" (click)="finalizeSale()" [disabled]="isFinalizing">
-        {{ isFinalizing ? 'PROCESANDO...' : 'FINALIZAR VENTA' }}
+      <button class="btn-finalizar" (click)="finalizeSale()" [disabled]="isFinalizing()">
+        {{ isFinalizing() ? 'PROCESANDO...' : 'FINALIZAR VENTA' }}
       </button>
 
       <p class="payment-note">Genera XML y PDF automaticamente</p>
@@ -252,7 +252,7 @@
               <p class="suggestion-name" style="padding: 14px">Sin resultados para "{{ clientModalSearch }}"</p>
             }
             @for (c of filteredModalClientes; track c.id) {
-              <button type="button" class="client-option" [class.selected]="cliente?.id === c.id" (click)="selectClient(c)">
+              <button type="button" class="client-option" [class.selected]="cliente()?.id === c.id" (click)="selectClient(c)">
                 <span class="material-icons">account_circle</span>
                 <div class="client-option-info">
                   <span class="client-option-name">{{ c.nombre }}</span>

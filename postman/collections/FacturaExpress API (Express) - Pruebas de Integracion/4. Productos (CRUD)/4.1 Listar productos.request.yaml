@@ -1,0 +1,18 @@
+$kind: http-request
+url: "{{baseUrl}}/productos"
+method: GET
+headers:
+  Authorization: Bearer {{token}}
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Listado de productos (HTTP 200)', function () {
+          pm.response.to.have.status(200);
+      });
+      pm.test('Devuelve total y arreglo de productos', function () {
+          const json = pm.response.json();
+          pm.expect(json.total).to.be.above(0);
+          pm.expect(json.productos).to.be.an('array');
+      });
+    language: text/javascript
+order: 1000

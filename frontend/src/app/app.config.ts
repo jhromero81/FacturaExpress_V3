@@ -4,8 +4,8 @@
  *  - Deteccion de cambios basada en Zone.js.
  *  - Router con carga diferida por modulo (ver app.routes.ts).
  *  - HttpClient con interceptor de sesion y backend XHR; las respuestas
- *    se entregan dentro de la zona angular para mantener el renderizado
- *    reactivo (complementado por core/render.service.ts).
+ *    se entregan dentro de la zona angular, de modo que el renderizado
+ *    reactivo no necesita ningun ciclo de deteccion manual.
  */
 
 import { ApplicationConfig, provideBrowserGlobalErrorListeners, provideZoneChangeDetection } from '@angular/core';

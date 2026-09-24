@@ -1,0 +1,18 @@
+$kind: http-request
+url: "{{baseUrl}}/facturas/{{facturaId}}/xml"
+method: GET
+headers:
+  Authorization: Bearer {{token}}
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('XML generado (HTTP 200)', function () {
+          pm.response.to.have.status(200);
+      });
+      pm.test('El XML contiene la estructura DIAN y el CUNE', function () {
+          const xml = pm.response.text();
+          pm.expect(xml).to.include('FacturaElectronica');
+          pm.expect(xml).to.include('<CUNE>');
+      });
+    language: text/javascript
+order: 6000

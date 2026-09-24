@@ -18,18 +18,23 @@ USE facturaexpress_apirest;
 -- Perfiles de acceso al sistema (administrador, vendedor, contador)
 -- ------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS usuarios (
-  id            INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  nit           VARCHAR(20)  NOT NULL UNIQUE,
-  nombre        VARCHAR(120) NOT NULL,
-  email         VARCHAR(150) NOT NULL UNIQUE,
-  telefono      VARCHAR(20)  NULL,
-  rol           VARCHAR(30)  NOT NULL DEFAULT 'vendedor',
-  password_hash VARCHAR(255) NOT NULL,
-  activo        TINYINT(1)   NOT NULL DEFAULT 1,
-  created_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
-                ON UPDATE CURRENT_TIMESTAMP
-) ENGINE=InnoDB;
+  id               INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  nit              VARCHAR(20)  NOT NULL UNIQUE,
+  nombre           VARCHAR(120) NOT NULL,
+  email            VARCHAR(150) NOT NULL UNIQUE,
+  telefono         VARCHAR(20)  NULL,
+  rol              ENUM('admin','vendedor','contador') NOT NULL DEFAULT 'vendedor',
+  password_hash    VARCHAR(255) NOT NULL,
+  activo           TINYINT(1)   NOT NULL DEFAULT 1,
+  -- Bloqueo temporal de la cuenta tras varios intentos fallidos de login.
+  -- Es una segunda barrera frente a la fuerza bruta distribuida, que el
+  -- limite por IP no cubre.
+  intentos_fallidos INT UNSIGNED NOT NULL DEFAULT 0,
+  bloqueado_hasta   DATETIME    NULL,
+  created_at       TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at       TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
+                   ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ------------------------------------------------------------
 -- Tabla: clientes
@@ -45,7 +50,7 @@ CREATE TABLE IF NOT EXISTS clientes (
   created_at     TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at     TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
                  ON UPDATE CURRENT_TIMESTAMP
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ------------------------------------------------------------
 -- Tabla: productos
@@ -61,8 +66,11 @@ CREATE TABLE IF NOT EXISTS productos (
   activo     TINYINT(1)     NOT NULL DEFAULT 1,
   created_at TIMESTAMP      NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP      NOT NULL DEFAULT CURRENT_TIMESTAMP
-             ON UPDATE CURRENT_TIMESTAMP
-) ENGINE=InnoDB;
+             ON UPDATE CURRENT_TIMESTAMP,
+  -- El stock nunca puede ser negativo: la invariante se aplica tambien en
+  -- la base y no solo en el codigo de la API.
+  CONSTRAINT chk_productos_stock CHECK (stock >= 0)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ------------------------------------------------------------
 -- Tabla: facturas
@@ -84,7 +92,8 @@ CREATE TABLE IF NOT EXISTS facturas (
   estado                 ENUM('pendiente','enviada','rechazada')
                          NOT NULL DEFAULT 'pendiente',
   cufe                   VARCHAR(150) NULL,
-  firma_estado           VARCHAR(20)  NOT NULL DEFAULT 'pendiente',
+  firma_estado           ENUM('pendiente','firmada','rechazada')
+                         NOT NULL DEFAULT 'pendiente',
   intentos_dian          INT          NOT NULL DEFAULT 0,
   correo_enviado         TINYINT(1)   NOT NULL DEFAULT 0,
   created_at             TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -92,7 +101,7 @@ CREATE TABLE IF NOT EXISTS facturas (
                          ON UPDATE CURRENT_TIMESTAMP,
   CONSTRAINT fk_facturas_cliente
     FOREIGN KEY (cliente_id) REFERENCES clientes (id)
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ------------------------------------------------------------
 -- Tabla: factura_items
@@ -113,7 +122,7 @@ CREATE TABLE IF NOT EXISTS factura_items (
     FOREIGN KEY (factura_id) REFERENCES facturas (id) ON DELETE CASCADE,
   CONSTRAINT fk_items_producto
     FOREIGN KEY (producto_id) REFERENCES productos (id) ON DELETE SET NULL
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ------------------------------------------------------------
 -- Tabla: empresa
@@ -132,7 +141,7 @@ CREATE TABLE IF NOT EXISTS empresa (
   created_at             TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at             TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
                          ON UPDATE CURRENT_TIMESTAMP
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ------------------------------------------------------------
 -- Tabla: errores_sistema
@@ -149,7 +158,7 @@ CREATE TABLE IF NOT EXISTS errores_sistema (
   created_at        TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT fk_errores_factura
     FOREIGN KEY (factura_id) REFERENCES facturas (id) ON DELETE SET NULL
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ------------------------------------------------------------
 -- Tabla: logs_auditoria
@@ -166,7 +175,7 @@ CREATE TABLE IF NOT EXISTS logs_auditoria (
   created_at     TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT fk_logs_usuario
     FOREIGN KEY (usuario_id) REFERENCES usuarios (id) ON DELETE SET NULL
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ------------------------------------------------------------
 -- Tabla: reportes
@@ -184,7 +193,7 @@ CREATE TABLE IF NOT EXISTS reportes (
   created_at     TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT fk_reportes_usuario
     FOREIGN KEY (usuario_id) REFERENCES usuarios (id) ON DELETE SET NULL
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ------------------------------------------------------------
 -- Tabla: backups
@@ -193,13 +202,32 @@ CREATE TABLE IF NOT EXISTS reportes (
 -- ------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS backups (
   id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  archivo     VARCHAR(255) NOT NULL,
+  archivo     VARCHAR(255) NOT NULL UNIQUE,
   tamano      BIGINT       NOT NULL DEFAULT 0,
+  -- Huella SHA-256 del contenido. La restauracion solo acepta archivos
+  -- cuyo hash coincida con el registrado al crearlos, de modo que un
+  -- archivo ajeno colocado en el directorio no pueda ejecutarse.
+  checksum    CHAR(64)     NULL,
   usuario_id  INT UNSIGNED NULL,
   created_at  TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT fk_backups_usuario
     FOREIGN KEY (usuario_id) REFERENCES usuarios (id) ON DELETE SET NULL
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ------------------------------------------------------------
+-- Tabla: secuencias_facturas
+-- Consecutivo persistente por prefijo (FAC-YYYYMM-). Es la fuente
+-- unica de la numeracion de facturas: a diferencia de contar las
+-- filas de facturas, una secuencia nunca retrocede, de modo que
+-- eliminar una factura no provoca numeros duplicados ni reutiliza
+-- numeros fiscales ya emitidos.
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS secuencias_facturas (
+  prefijo    VARCHAR(20)  NOT NULL PRIMARY KEY,
+  ultimo     INT UNSIGNED NOT NULL DEFAULT 0,
+  updated_at TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
+             ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ------------------------------------------------------------
 -- Tabla: tokens_revocados
@@ -212,7 +240,7 @@ CREATE TABLE IF NOT EXISTS tokens_revocados (
   jti        VARCHAR(64) NOT NULL PRIMARY KEY,
   expira_en  DATETIME    NOT NULL,
   created_at TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Indices auxiliares para busquedas frecuentes
 CREATE INDEX idx_facturas_estado ON facturas (estado);
@@ -225,3 +253,6 @@ CREATE INDEX idx_errores_resuelto ON errores_sistema (resuelto);
 CREATE INDEX idx_logs_usuario    ON logs_auditoria (usuario_id);
 CREATE INDEX idx_logs_tabla      ON logs_auditoria (tabla_afectada);
 CREATE INDEX idx_logs_fecha      ON logs_auditoria (created_at);
+CREATE INDEX idx_reportes_fecha  ON reportes (created_at);
+CREATE INDEX idx_tokens_expira   ON tokens_revocados (expira_en);
+CREATE INDEX idx_facturas_cliente ON facturas (cliente_id);

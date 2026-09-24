@@ -1,0 +1,16 @@
+$kind: http-request
+url: "{{baseUrl}}/reportes/pdf?periodo=mensual"
+method: GET
+headers:
+  Authorization: Bearer {{token}}
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Reporte PDF generado (HTTP 200)', function () {
+          pm.response.to.have.status(200);
+      });
+      pm.test('Content-Type es application/pdf', function () {
+          pm.expect(pm.response.headers.get('Content-Type')).to.include('application/pdf');
+      });
+    language: text/javascript
+order: 3000

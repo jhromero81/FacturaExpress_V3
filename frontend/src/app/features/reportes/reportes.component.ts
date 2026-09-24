@@ -5,11 +5,11 @@
  * ventas mensual, exportacion PDF e historial de reportes.
  */
 
-import { Component, ElementRef, inject, signal, ViewChild, ChangeDetectorRef } from '@angular/core';
+import { Component, ElementRef, inject, signal, ViewChild } from '@angular/core';
 import { ApiService, mensajeError } from '../../core/api.service';
 import { ToastService } from '../../core/toast.service';
 import { KPIs } from '../../core/models';
-import { formatDate, formatMoney, formatShortMoney } from '../../core/formatters';
+import { formatDate, formatMoney, formatShortMoney, periodoLabel } from '../../core/formatters';
 import { META_VENTAS_MENSUAL } from '../../core/constants';
 
 /** Periodos disponibles para el reporte */
@@ -52,24 +52,6 @@ interface ReporteHistorial {
   createdAt: string;
 }
 
-/**
- * Convierte una etiqueta de periodo ("2026-08", "2026-Q3", "2026")
- * en abreviatura legible para el grafico (Ene-Dic / T1-T4 / anio).
- */
-function periodoLabel(periodo: unknown): string {
-  const value = String(periodo ?? '');
-  const [year, month, q] = value.split('-');
-  const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
-
-  if (q && q.startsWith('Q')) return `T${q.slice(1)}`;
-  const num = Number(month);
-  if (month && !isNaN(num) && num >= 1 && num <= 12) {
-    return meses[num - 1] || value;
-  }
-  if (month) return `S${num}`;
-  return year || value;
-}
-
 @Component({
   selector: 'app-reportes',
   standalone: true,
@@ -79,8 +61,6 @@ function periodoLabel(periodo: unknown): string {
 })
 export class ReportesComponent {
 
-  /** Vista activa para el refresco manual tras respuestas HTTP. */
-  readonly cdr = inject(ChangeDetectorRef);
   private api = inject(ApiService);
   private toast = inject(ToastService);
 
@@ -89,6 +69,9 @@ export class ReportesComponent {
 
   readonly periodos = PERIODOS;
   readonly metaVentas = META_VENTAS_MENSUAL;
+
+  /** Lineas de referencia horizontales del grafico (constantes). */
+  readonly lineasReferencia = [0, 1, 2, 3, 4];
 
   periodo = 'mensual';
   kpis = signal<KPIs | null>(null);
@@ -211,13 +194,25 @@ export class ReportesComponent {
     this.exporting.set(true);
     this.api
       .descargar(`/reportes/pdf?periodo=${this.periodo}`)
-      .then(() => this.toast.mostrar('Reporte PDF generado correctamente', 'success'))
-      .then(() =>
-        this.api
-          .get<{ success: boolean; reportes: ReporteHistorial[] }>('/reportes/historial')
-          .subscribe((res) => this.historial.set(res.reportes ?? []))
-      )
+      .then(() => {
+        this.toast.mostrar('Reporte PDF generado correctamente', 'success');
+        this.refrescarHistorial();
+      })
       .catch((err) => this.toast.mostrar(mensajeError(err), 'error'))
       .finally(() => this.exporting.set(false));
+  }
+
+  /**
+   * Refresca el historial de reportes. Antes se encadenaba dentro del
+   * .then() devolviendo una suscripcion, de modo que un fallo del
+   * historial no llegaba ni al catch ni al usuario.
+   */
+  private refrescarHistorial(): void {
+    this.api
+      .get<{ success: boolean; reportes: ReporteHistorial[] }>('/reportes/historial')
+      .subscribe({
+        next: (res) => this.historial.set(res.reportes ?? []),
+        error: (err) => this.toast.mostrar(mensajeError(err), 'error'),
+      });
   }
 }

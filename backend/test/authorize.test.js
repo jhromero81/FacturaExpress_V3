@@ -3,12 +3,15 @@
  * Pruebas del middleware de autorizacion por rol y verificacion estatica
  * de la matriz de permisos declarada en las rutas del backend.
  *
- * Modelo de autorizacion vigente:
+ * Modelo de autorizacion vigente (matriz de permisos por rol):
  *  - Los modulos administrativos (usuarios, errores, logs, backup) y la
  *    escritura de configuracion exigen el rol admin.
- *  - Los modulos de operacion (clientes, productos, facturas, reportes)
- *    exigen autenticacion y delegan el detalle del permiso a la logica
- *    del controlador.
+ *  - Clientes: lectura para todos; alta/edicion admin y vendedor;
+ *    eliminacion solo admin.
+ *  - Productos: lectura para todos; escritura solo admin.
+ *  - Facturas: consulta y descargas para todos; emision admin y vendedor;
+ *    cambio de estado DIAN admin y contador; eliminacion solo admin.
+ *  - Reportes: todos los roles autenticados.
  */
 
 'use strict';
@@ -114,12 +117,60 @@ test('los modulos de operacion exigen autenticacion en todas sus rutas', () => {
       /router\.use\(authenticate/,
       `${archivo} debe exigir autenticacion en todas sus rutas`
     );
-    assert.doesNotMatch(
-      contenido,
-      /authorize\(/,
-      `${archivo} no restringe por rol: la autorizacion se resuelve en el controlador`
-    );
   }
+});
+
+/**
+ * Verifica que una ruta concreta declare el rol exigido.
+ * @param {string} archivo - Archivo de rutas.
+ * @param {RegExp} patron - Patron de la declaracion de la ruta.
+ * @param {string} mensaje - Mensaje de fallo.
+ */
+function exigirRol(archivo, patron, mensaje) {
+  assert.match(leerRuta(archivo), patron, mensaje);
+}
+
+test('la matriz de permisos por rol coincide con la documentada', () => {
+  // Clientes: lectura para todos, alta/edicion admin y vendedor,
+  // eliminacion solo admin.
+  exigirRol('clientes.routes.js', /router\.post\(\s*'\/',\s*authorize\('admin',\s*'vendedor'\)/, 'clientes: el alta debe permitir admin y vendedor');
+  exigirRol('clientes.routes.js', /router\.put\(\s*'\/:id',\s*authorize\('admin',\s*'vendedor'\)/, 'clientes: la edicion debe permitir admin y vendedor');
+  exigirRol('clientes.routes.js', /router\.delete\(\s*'\/:id',\s*authorize\('admin'\)/, 'clientes: la eliminacion debe ser solo del admin');
+
+  // Productos: catalogo de lectura para todos; escritura solo admin.
+  exigirRol('productos.routes.js', /router\.post\(\s*'\/',\s*authorize\('admin'\)/, 'productos: el alta debe ser solo del admin');
+  exigirRol('productos.routes.js', /router\.put\(\s*'\/:id',\s*authorize\('admin'\)/, 'productos: la edicion debe ser solo del admin');
+  exigirRol('productos.routes.js', /router\.patch\(\s*'\/:id\/stock',\s*authorize\('admin'\)/, 'productos: el ajuste de stock debe ser solo del admin');
+  exigirRol('productos.routes.js', /router\.delete\(\s*'\/:id',\s*authorize\('admin'\)/, 'productos: la baja debe ser solo del admin');
+
+  // Facturas: emision admin y vendedor; estado DIAN admin y contador;
+  // eliminacion solo admin.
+  exigirRol('facturas.routes.js', /router\.post\(\s*'\/',\s*authorize\('admin',\s*'vendedor'\)/, 'facturas: la emision debe permitir admin y vendedor');
+  exigirRol('facturas.routes.js', /router\.put\(\s*'\/:id\/estado',\s*authorize\('admin',\s*'contador'\)/, 'facturas: el estado DIAN debe permitir admin y contador');
+  exigirRol('facturas.routes.js', /router\.delete\(\s*'\/:id',\s*authorize\('admin'\)/, 'facturas: la eliminacion debe ser solo del admin');
+
+  // Reportes: disponibles para todos los roles autenticados.
+  assert.doesNotMatch(
+    leerRuta('reportes.routes.js'),
+    /authorize\(/,
+    'reportes: no debe restringirse por rol'
+  );
+});
+
+test('las rutas de facturas no permiten emitir ni cambiar estado a cualquier rol', () => {
+  const contenido = leerRuta('facturas.routes.js');
+  // Defensa contra la regresion: la emision y la eliminacion no pueden
+  // quedar sin restriccion de rol.
+  assert.doesNotMatch(
+    contenido,
+    /router\.post\(\s*'\/',\s*createFacturaValidator/,
+    'facturas: la emision debe declarar authorize() antes de los validadores'
+  );
+  assert.doesNotMatch(
+    contenido,
+    /router\.delete\(\s*'\/:id',\s*idValidator/,
+    'facturas: la eliminacion debe declarar authorize() antes de los validadores'
+  );
 });
 
 test('el login es la unica ruta publica del modulo de autenticacion', () => {

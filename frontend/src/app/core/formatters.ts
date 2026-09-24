@@ -68,13 +68,72 @@ export function truncateText(texto: string, maxLen = 50): string {
   return texto.substring(0, maxLen) + '...';
 }
 
-/** Calcula el IVA de un valor base. */
-export function calcularIVA(base: number): number {
-  return Math.round(base * IVA_RATE);
+/**
+ * Calcula el IVA de un valor base con la tarifa indicada.
+ * La tarifa es parametrizable porque cada producto puede tributar una
+ * distinta (0%, 5% o 19%); el valor por defecto es la tarifa general.
+ * @param base - Valor base sin IVA.
+ * @param tasa - Tarifa en tanto por uno.
+ */
+export function calcularIVA(base: number, tasa: number = IVA_RATE): number {
+  const tarifa = Number.isFinite(tasa) ? tasa : IVA_RATE;
+  return Math.round(Number(base || 0) * tarifa);
 }
 
 /** Calcula el porcentaje de cambio entre dos valores. */
 export function calculateVariation(actual: number, anterior: number): number {
   if (anterior === 0) return actual > 0 ? 100 : 0;
   return Math.round(((actual - anterior) / anterior) * 100);
+}
+
+/**
+ * Escapa una celda para CSV (RFC 4180) y neutraliza la inyeccion de
+ * formulas: los valores que no son numeros y comienzan por = + @,
+ * tabulador o un menos seguido de texto reciben una comilla simple.
+ * Se entrecomillan los que contienen comas, comillas dobles o saltos
+ * de linea.
+ */
+export function csvCell(valor: unknown): string {
+  if (valor === null || valor === undefined) return '';
+  if (typeof valor === 'number') return String(valor);
+
+  let str = String(valor);
+  const esNumero = /^-?\d+(\.\d+)?$/.test(str);
+  if (!esNumero && (/^[=+@\t\r]/.test(str) || str.startsWith('-'))) {
+    str = `'${str}`;
+  }
+  if (/[",\r\n]/.test(str)) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return str;
+}
+
+/**
+ * Convierte la etiqueta de periodo que emite la API en una abreviatura
+ * legible para los graficos:
+ *   - mensual:    "2026-08"  -> "Ago"
+ *   - trimestral: "2026-Q3"  -> "T3"
+ *   - semanal:    "2026-35"  -> "S35"
+ *   - anual:      "2026"     -> "2026"
+ *
+ * El formato trimestral tiene dos segmentos, por lo que separar por "-"
+ * y leer la tercera posicion devolvia "SNaN" en el eje del grafico.
+ */
+export function periodoLabel(periodo: unknown): string {
+  const value = String(periodo ?? '').trim();
+  const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+
+  const trimestre = /^(\d{4})-Q([1-4])$/i.exec(value);
+  if (trimestre) return `T${trimestre[2]}`;
+
+  if (/^\d{4}$/.test(value)) return value;
+
+  const partes = /^(\d{4})-(\d{1,2})$/.exec(value);
+  if (partes) {
+    const numero = Number(partes[2]);
+    if (numero >= 1 && numero <= 12) return meses[numero - 1] ?? value;
+    return `S${numero}`;
+  }
+
+  return value;
 }

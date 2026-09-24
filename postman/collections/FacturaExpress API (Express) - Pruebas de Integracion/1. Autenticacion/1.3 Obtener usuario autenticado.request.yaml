@@ -1,0 +1,18 @@
+$kind: http-request
+url: "{{baseUrl}}/auth/me"
+method: GET
+headers:
+  Authorization: Bearer {{token}}
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Usuario autenticado (HTTP 200)', function () {
+          pm.response.to.have.status(200);
+      });
+      pm.test('Los datos coinciden con el token', function () {
+          const json = pm.response.json();
+          pm.expect(json.usuario.nit).to.eql('900.123.456-7');
+          pm.expect(json.usuario.password_hash).to.be.undefined;
+      });
+    language: text/javascript
+order: 3000

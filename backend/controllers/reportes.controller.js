@@ -8,7 +8,7 @@
 const { pool } = require('../config/db');
 const { asyncHandler, createHttpError } = require('../middleware/errorHandler');
 const { registrarAuditoria } = require('../utils/auditoria');
-const { clampInt } = require('../utils/helpers');
+const { clampInt, asString } = require('../utils/helpers');
 const pdfService = require('../services/pdf.service');
 
 /** Meta mensual de ventas en COP (consistente con el frontend) */
@@ -22,41 +22,74 @@ const PERIODOS = {
   anual: { sql: `DATE_FORMAT(fecha, '%Y')`, dias: 365 },
 };
 
+/** Periodo por defecto cuando el solicitado no es valido */
+const PERIODO_DEFECTO = 'mensual';
+
+/**
+ * Resuelve el periodo solicitado contra la lista blanca.
+ *
+ * Antes se hacia `PERIODOS[periodo] || PERIODOS.mensual`, que consultaba
+ * la cadena en el prototipo del objeto: `?periodo=constructor` devolvia
+ * una funcion, `config.sql` quedaba undefined y la consulta fallaba con
+ * "Unknown column 'undefined'" (HTTP 500).
+ *
+ * @param {*} valor - Valor crudo del query string.
+ * @returns {string} Clave de periodo valida.
+ */
+function resolverPeriodo(valor) {
+  const clave = asString(valor, PERIODO_DEFECTO).trim();
+  return Object.hasOwn(PERIODOS, clave) ? clave : PERIODO_DEFECTO;
+}
+
 /**
  * GET /api/reportes/kpis
- * Indicadores clave del sistema: ventas del dia, facturas
- * emitidas, pendientes DIAN, ticket promedio, ventas del mes,
- * clientes nuevos y avance de la meta mensual.
+ * Indicadores clave del sistema. Los indicadores etiquetados como del
+ * mes se calculan realmente sobre el mes en curso: antes se sumaban
+ * TODAS las facturas historicas y el dashboard mostraba el acumulado
+ * como si fuera el mes actual.
+ *
+ * Las fechas se comparan dentro de MySQL (CURDATE) y no con la fecha del
+ * proceso Node, de modo que no hay desfase entre zonas horarias.
  */
 const getKPIs = asyncHandler(async (req, res) => {
-  const hoy = new Date().toISOString().slice(0, 10);
-
-  // Todos los indicadores se calculan en una sola consulta (antes eran
-  // cinco viajes a la base) para responder el dashboard con menor latencia.
   const [rows] = await pool.query(
     `SELECT
-       (SELECT COUNT(*) FROM facturas WHERE DATE(fecha) = ?) AS facturas_hoy,
-       (SELECT COALESCE(SUM(total), 0) FROM facturas WHERE DATE(fecha) = ?) AS ventas_hoy,
+       (SELECT COUNT(*) FROM facturas
+         WHERE DATE(fecha) = CURDATE() AND estado <> 'rechazada') AS facturas_hoy,
+       (SELECT COALESCE(SUM(total), 0) FROM facturas
+         WHERE DATE(fecha) = CURDATE() AND estado <> 'rechazada') AS ventas_hoy,
+       (SELECT COALESCE(SUM(total), 0) FROM facturas
+         WHERE DATE(fecha) = DATE_SUB(CURDATE(), INTERVAL 1 DAY)
+           AND estado <> 'rechazada') AS ventas_ayer,
        (SELECT COUNT(*) FROM facturas WHERE estado = 'pendiente') AS pendientes,
-       (SELECT COUNT(*) FROM facturas WHERE estado <> 'rechazada') AS total_facturas,
-       (SELECT COALESCE(SUM(total), 0) FROM facturas WHERE estado <> 'rechazada') AS ventas_totales,
-       (SELECT COUNT(*) FROM clientes WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)) AS clientes_nuevos,
-       (SELECT COALESCE(SUM(cantidad), 0) FROM factura_items) AS productos_vendidos`,
-    [hoy, hoy]
+       (SELECT COUNT(*) FROM facturas
+         WHERE DATE_FORMAT(fecha, '%Y-%m') = DATE_FORMAT(CURDATE(), '%Y-%m')
+           AND estado <> 'rechazada') AS facturas_mes,
+       (SELECT COALESCE(SUM(total), 0) FROM facturas
+         WHERE DATE_FORMAT(fecha, '%Y-%m') = DATE_FORMAT(CURDATE(), '%Y-%m')
+           AND estado <> 'rechazada') AS ventas_mes,
+       (SELECT COUNT(*) FROM clientes
+         WHERE DATE_FORMAT(created_at, '%Y-%m') = DATE_FORMAT(CURDATE(), '%Y-%m')) AS clientes_nuevos,
+       (SELECT COALESCE(SUM(fi.cantidad), 0)
+          FROM factura_items fi
+          JOIN facturas f ON f.id = fi.factura_id
+         WHERE DATE_FORMAT(f.fecha, '%Y-%m') = DATE_FORMAT(CURDATE(), '%Y-%m')
+           AND f.estado <> 'rechazada') AS productos_vendidos`
   );
 
   const k = rows[0];
   const facturasHoy = Number(k.facturas_hoy);
   const ventasDia = Number(k.ventas_hoy);
-  const totalFacturas = Number(k.total_facturas);
-  const ventasMes = Number(k.ventas_totales);
+  const ventasAyer = Number(k.ventas_ayer);
+  const ventasMes = Number(k.ventas_mes);
 
   res.json({
     success: true,
     kpis: {
       ventasDia,
+      ventasAyer,
       facturasEmitidasHoy: facturasHoy,
-      facturasEmitidas: totalFacturas,
+      facturasEmitidas: Number(k.facturas_mes),
       pendientesDIAN: Number(k.pendientes),
       ticketPromedio: facturasHoy > 0 ? Math.round(ventasDia / facturasHoy) : 0,
       ventasMes,
@@ -70,19 +103,28 @@ const getKPIs = asyncHandler(async (req, res) => {
 
 /**
  * GET /api/reportes/ventas-semanales
- * Ventas agrupadas por dia de los ultimos 7 dias para el grafico
- * del Dashboard.
+ * Ventas de los ultimos 7 dias para el grafico del Dashboard.
+ * Devuelve SIEMPRE los 7 dias (con ceros donde no hubo ventas) para que
+ * el eje del grafico no dependa de la fecha del navegador: antes el
+ * frontend reconstruia las etiquetas con su propio reloj y, si el
+ * navegador estaba en otra zona horaria, las claves no coincidian y el
+ * grafico mostraba todo en cero.
  */
 const getVentasSemanales = asyncHandler(async (req, res) => {
   const [rows] = await pool.query(
-    `SELECT DATE(fecha) AS dia,
-            COUNT(*) AS facturas,
-            COALESCE(SUM(total), 0) AS total
-       FROM facturas
-      WHERE fecha >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
-        AND estado <> 'rechazada'
-      GROUP BY DATE(fecha)
-      ORDER BY dia ASC`
+    `WITH RECURSIVE dias AS (
+       SELECT DATE_SUB(CURDATE(), INTERVAL 6 DAY) AS dia
+       UNION ALL
+       SELECT DATE_ADD(dia, INTERVAL 1 DAY) FROM dias WHERE dia < CURDATE()
+     )
+     SELECT d.dia AS dia,
+            COUNT(f.id) AS facturas,
+            COALESCE(SUM(f.total), 0) AS total
+       FROM dias d
+       LEFT JOIN facturas f
+         ON DATE(f.fecha) = d.dia AND f.estado <> 'rechazada'
+      GROUP BY d.dia
+      ORDER BY d.dia ASC`
   );
 
   const dias = rows.map((r) => ({
@@ -102,8 +144,8 @@ const getVentasSemanales = asyncHandler(async (req, res) => {
  * Valores de periodo: semanal, mensual, trimestral, anual.
  */
 const getVentasPeriodo = asyncHandler(async (req, res) => {
-  const { periodo = 'mensual' } = req.query;
-  const config = PERIODOS[periodo] || PERIODOS.mensual;
+  const periodo = resolverPeriodo(req.query.periodo);
+  const config = PERIODOS[periodo];
 
   // Ventana actual: ultimos N dias hasta hoy
   const [rows] = await pool.query(
@@ -225,8 +267,8 @@ const getUltimasTransacciones = asyncHandler(async (req, res) => {
  * registra el reporte en la tabla reportes.
  */
 const getReportePDF = asyncHandler(async (req, res) => {
-  const { periodo = 'mensual' } = req.query;
-  const config = PERIODOS[periodo] || PERIODOS.mensual;
+  const periodo = resolverPeriodo(req.query.periodo);
+  const config = PERIODOS[periodo];
 
   // Datos agregados del periodo
   const [kpisRows] = await pool.query(
@@ -290,18 +332,26 @@ const getReportePDF = asyncHandler(async (req, res) => {
     empresa,
   });
 
-  // Guardar el historial del reporte
+  // Guardar el historial del reporte. Se registra el usuario que lo
+  // genero y el rango de fechas cubierto (la tabla ya tenia esas columnas
+  // pero nunca se llenaban, de modo que el historial no era atribuible).
+  const hoy = new Date().toISOString().slice(0, 10);
   await pool.query(
-    'INSERT INTO reportes (tipo, periodo, archivo, tamano) VALUES (?, ?, ?, ?)',
+    `INSERT INTO reportes (tipo, periodo, fecha_inicio, fecha_fin, archivo, tamano, usuario_id)
+     VALUES (?, ?, DATE_SUB(CURDATE(), INTERVAL ? DAY), CURDATE(), ?, ?, ?)`,
     [
       'pdf',
       periodo,
-      `reporte-${periodo}-${new Date().toISOString().slice(0, 10)}.pdf`,
+      config.dias,
+      `reporte-${periodo}-${hoy}.pdf`,
       pdfBuffer.length,
+      req.usuario?.id ?? null,
     ]
   );
   await registrarAuditoria(req, `REPORTE PDF generado periodo=${periodo}`, 'reportes');
 
+  // El nombre del archivo se construye solo con la clave de periodo, que
+  // ya esta validada contra la lista blanca.
   const nombreArchivo = `reporte-ventas-${periodo}.pdf`;
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `attachment; filename="${nombreArchivo}"`);

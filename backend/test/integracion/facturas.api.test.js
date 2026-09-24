@@ -45,10 +45,14 @@ function prepararEscenario(opciones = {}) {
     usuarioId: ++secuenciaUsuarios, // id unico: evita el cache de sesion de auth.js
     rol: 'vendedor',
     stockProducto: 10,
+    tarifaIva: 0.19,
     afectarStock: true,
     facturaExiste: true,
     clienteExiste: true,
     estadoFactura: 'pendiente',
+    firmaEstado: 'pendiente',
+    intentosDian: 0,
+    secuencia: 4, // la reserva de numero la incrementa a 5
     insertFactura: null,
     insertItems: null,
     ultimoEstado: null,
@@ -76,7 +80,7 @@ function filasProductos(ids) {
       codigo: base.codigo,
       nombre: base.nombre,
       precio: base.precio,
-      iva: 0.19,
+      iva: Number(escenario.tarifaIva),
       stock: Number(escenario.stockProducto),
       activo: 1,
     };
@@ -99,8 +103,8 @@ function filaFactura() {
     total: p[7],
     estado: escenario.ultimoEstado || escenario.estadoFactura,
     cufe: p[8],
-    firma_estado: escenario.ultimaFirma || 'pendiente',
-    intentos_dian: escenario.ultimosIntentos || 0,
+    firma_estado: escenario.ultimaFirma || escenario.firmaEstado,
+    intentos_dian: escenario.ultimosIntentos ?? escenario.intentosDian,
     correo_enviado: 0,
   };
 }
@@ -137,8 +141,14 @@ function responder(sqlCrudo, params = []) {
     return [[{ activo: 1, rol: escenario.rol, token_version: 0 }]];
   }
 
-  // Numeracion secuencial: COUNT de facturas del mes
-  if (sql.includes('COUNT(*) AS total') && sql.includes('FROM facturas')) return [[{ total: 4 }]];
+  // Numeracion: la secuencia persistente no depende del conteo de facturas
+  if (sql.includes('INSERT INTO secuencias_facturas')) {
+    escenario.secuencia += 1;
+    return [{ affectedRows: 1 }];
+  }
+  if (sql.includes('SELECT ultimo FROM secuencias_facturas')) {
+    return [[{ ultimo: escenario.secuencia }]];
+  }
 
   // Catalogos
   if (sql.includes('FROM clientes')) {
@@ -170,16 +180,26 @@ function responder(sqlCrudo, params = []) {
     return [{ affectedRows: 1 }];
   }
 
-  // Consultas y actualizaciones de estado
-  if (sql.startsWith('SELECT id, numero, estado FROM facturas')) {
+  // Consultas y actualizaciones de estado. Cubre tanto el SELECT del
+  // cambio de estado (con firma_estado e intentos_dian) como el de la
+  // eliminacion (solo id, numero y estado).
+  if (sql.startsWith('SELECT id, numero, estado') && sql.includes('FROM facturas')) {
     return [
       escenario.facturaExiste
-        ? [{ id: 1, numero: 'FAC-202609-00005', estado: escenario.estadoFactura }]
+        ? [{
+            id: 1,
+            numero: 'FAC-202609-00005',
+            estado: escenario.estadoFactura,
+            firma_estado: escenario.firmaEstado,
+            intentos_dian: escenario.intentosDian,
+          }]
         : [],
     ];
   }
   if (sql.startsWith('UPDATE facturas SET estado')) {
     [escenario.ultimoEstado, escenario.ultimaFirma, escenario.ultimosIntentos] = params;
+    escenario.firmaEstado = escenario.ultimaFirma;
+    escenario.intentosDian = escenario.ultimosIntentos;
     return [{ affectedRows: 1 }];
   }
   if (sql.startsWith('SELECT producto_id, cantidad FROM factura_items')) {
@@ -334,10 +354,8 @@ test('POST /api/facturas exige autenticacion (401 sin token)', async () => {
   assert.equal(traza.commits, 0);
 });
 
-test('POST /api/facturas permite emitir a cualquier rol autenticado (contador)', async () => {
-  // El modulo de facturacion exige autenticacion pero no restringe la
-  // emision por rol: el contador tambien puede registrar la venta.
-  prepararEscenario({ rol: 'contador' });
+test('POST /api/facturas permite emitir al vendedor', async () => {
+  prepararEscenario({ rol: 'vendedor' });
   const r = await peticion('POST', '/api/facturas', {
     clienteId: 1,
     items: [{ productoId: 1, cantidad: 1 }],
@@ -347,6 +365,20 @@ test('POST /api/facturas permite emitir a cualquier rol autenticado (contador)',
   assert.equal(traza.commits, 1);
 
   await drenarPostVenta();
+});
+
+test('POST /api/facturas rechaza al contador (403, matriz de permisos)', async () => {
+  // La emision de la venta corresponde a admin y vendedor; el contador
+  // participa en el ciclo DIAN, no en la venta.
+  prepararEscenario({ rol: 'contador' });
+  const r = await peticion('POST', '/api/facturas', {
+    clienteId: 1,
+    items: [{ productoId: 1, cantidad: 1 }],
+  });
+
+  assert.equal(r.status, 403);
+  assert.equal(traza.commits, 0);
+  assert.equal(traza.sqls.some((s) => s.includes('INSERT INTO facturas')), false);
 });
 
 test('POST /api/facturas sin items responde 400 con los campos invalidos', async () => {
@@ -558,14 +590,137 @@ test('PUT /api/facturas/:id/estado exige autenticacion (401 sin token)', async (
   assert.equal(escenario.ultimoEstado, null, 'no debe modificar el estado sin credenciales');
 });
 
-test('PUT /api/facturas/:id/estado actualiza el estado con rol vendedor', async () => {
+test('PUT /api/facturas/:id/estado rechaza al vendedor (403, matriz de permisos)', async () => {
+  // El cambio de estado DIAN es una funcion contable: admin y contador.
   prepararEscenario({ rol: 'vendedor' });
 
   const r = await peticion('PUT', '/api/facturas/1/estado', { estado: 'enviada' });
 
+  assert.equal(r.status, 403);
+  assert.equal(escenario.ultimoEstado, null, 'no debe modificar el estado sin permiso');
+});
+
+// ============================================================
+// 5. Regresion: ciclo de estados DIAN completo
+// ============================================================
+test('PUT /api/facturas/:id/estado marca la factura como rechazada (regresion 500)', async () => {
+  // Antes el SELECT no traia firma_estado ni intentos_dian: el contador
+  // se enviaba como NULL a una columna NOT NULL y MySQL respondia 500.
+  prepararEscenario({ rol: 'contador', estadoFactura: 'pendiente', intentosDian: 2 });
+
+  const r = await peticion('PUT', '/api/facturas/1/estado', { estado: 'rechazada' });
+
+  assert.equal(r.status, 200, `sentencias: ${traza.sqls.join(' | ')}`);
+  assert.equal(r.body.factura.estado, 'rechazada');
+  assert.equal(escenario.ultimaFirma, 'rechazada');
+  assert.equal(escenario.ultimosIntentos, 2, 'los intentos previos no se pierden');
+  assert.match(r.body.message, /rechazada/);
+});
+
+test('PUT /api/facturas/:id/estado devuelve una factura a pendiente (regresion 500)', async () => {
+  prepararEscenario({ rol: 'admin', estadoFactura: 'rechazada', firmaEstado: 'rechazada', intentosDian: 3 });
+
+  const r = await peticion('PUT', '/api/facturas/1/estado', { estado: 'pendiente' });
+
+  assert.equal(r.status, 200, `sentencias: ${traza.sqls.join(' | ')}`);
+  assert.equal(r.body.factura.estado, 'pendiente');
+  assert.equal(escenario.ultimaFirma, 'pendiente');
+  assert.equal(escenario.ultimosIntentos, 3, 'los intentos previos no se pierden');
+});
+
+test('PUT /api/facturas/:id/estado acumula los intentos de envio a la DIAN', async () => {
+  prepararEscenario({ rol: 'contador', estadoFactura: 'pendiente', intentosDian: 2 });
+
+  const r = await peticion('PUT', '/api/facturas/1/estado', { estado: 'enviada' });
+
   assert.equal(r.status, 200);
-  assert.equal(r.body.factura.estado, 'enviada');
-  assert.match(r.body.message, /enviada/);
+  assert.equal(escenario.ultimaFirma, 'firmada');
+  assert.equal(escenario.ultimosIntentos, 3, 'debe incrementar, no reiniciar el contador');
+});
+
+test('PUT /api/facturas/:id/estado rechaza un estado fuera del catalogo DIAN', async () => {
+  prepararEscenario({ rol: 'admin' });
+
+  const r = await peticion('PUT', '/api/facturas/1/estado', { estado: 'anulada' });
+
+  assert.equal(r.status, 400);
+  assert.equal(escenario.ultimoEstado, null);
+});
+
+// ============================================================
+// 6. Regresion: numeracion persistente e IVA por producto
+// ============================================================
+test('la numeracion no reutiliza ni duplica numeros tras eliminar facturas (regresion)', async () => {
+  // Con COUNT(*)+1, eliminar una factura intermedia hacia que la siguiente
+  // venta intentara reutilizar un numero existente (clave duplicada, 500).
+  prepararEscenario({ rol: 'admin', estadoFactura: 'pendiente', secuencia: 3 });
+
+  // Eliminar una factura no toca la secuencia
+  const baja = await peticion('DELETE', '/api/facturas/1');
+  assert.equal(baja.status, 200);
+  assert.equal(escenario.secuencia, 3, 'eliminar una factura no retrocede la secuencia');
+
+  // La siguiente venta continua desde la secuencia, no desde el conteo
+  prepararEscenario({ rol: 'vendedor', secuencia: 3 });
+  const venta = await peticion('POST', '/api/facturas', {
+    clienteId: 1,
+    items: [{ productoId: 1, cantidad: 1 }],
+  });
+
+  assert.equal(venta.status, 201, `sentencias: ${traza.sqls.join(' | ')}`);
+  assert.equal(venta.body.factura.numero, 'FAC-202609-00004');
+  assert.equal(
+    traza.sqls.some((s) => s.includes('COUNT(*)') && s.includes('FROM facturas')),
+    false,
+    'no debe deducir el consecutivo contando facturas'
+  );
+
+  await drenarPostVenta();
+});
+
+test('la factura aplica la tarifa de IVA configurada en el producto', async () => {
+  // Producto con tarifa del 5%: antes se facturaba siempre al 19%.
+  prepararEscenario({ rol: 'vendedor', tarifaIva: 0.05 });
+
+  const r = await peticion('POST', '/api/facturas', {
+    clienteId: 1,
+    items: [{ productoId: 1, cantidad: 2 }], // 2 x 25.000 = 50.000
+  });
+
+  assert.equal(r.status, 201);
+  assert.equal(r.body.factura.subtotal, 50000);
+  assert.equal(r.body.factura.iva, 2500, 'el IVA debe ser el 5% de 50.000');
+  assert.equal(r.body.factura.total, 52500);
+  assert.equal(r.body.factura.items[0].iva, 2500);
+
+  await drenarPostVenta();
+});
+
+test('el detalle de la factura cuadra con la cabecera cuando hay descuento', async () => {
+  prepararEscenario({ rol: 'vendedor', tarifaIva: 0.19 });
+
+  const r = await peticion('POST', '/api/facturas', {
+    clienteId: 1,
+    items: [
+      { productoId: 1, cantidad: 3 }, // 75.000
+      { productoId: 2, cantidad: 2 }, // 20.000
+    ],
+    descuento: 10,
+  });
+
+  assert.equal(r.status, 201);
+
+  const factura = r.body.factura;
+  const sumaSubtotales = factura.items.reduce((s, i) => s + i.subtotal, 0);
+  const sumaIvas = factura.items.reduce((s, i) => s + i.iva, 0);
+
+  assert.equal(sumaSubtotales, factura.subtotal, 'la suma de subtotales debe cuadrar');
+  assert.equal(sumaIvas, factura.iva, 'la suma de IVA de las lineas debe cuadrar con la cabecera');
+  assert.equal(factura.subtotal - factura.descuento + factura.iva, factura.total);
+  // 95.000 - 9.500 = 85.500 base; IVA 19% sobre la base descontada
+  assert.equal(factura.iva, 16245);
+
+  await drenarPostVenta();
 });
 
 test('PUT /api/facturas/:id/estado con factura inexistente responde 404', async () => {

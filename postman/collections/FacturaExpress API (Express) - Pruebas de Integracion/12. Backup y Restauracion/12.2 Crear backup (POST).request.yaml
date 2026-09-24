@@ -1,0 +1,23 @@
+$kind: http-request
+url: "{{baseUrl}}/backup"
+method: POST
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{token}}
+body:
+  type: text
+  content: "{}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Backup creado (HTTP 201)', function () {
+          pm.response.to.have.status(201);
+      });
+      const json = pm.response.json();
+      pm.test('Respaldo persistido en disco', function () {
+          pm.expect(json.backup.archivo).to.match(/^backup_.*\.sql$/);
+          pm.expect(json.backup.tamano).to.be.above(0);
+      });
+      pm.collectionVariables.set('archivoBackup', json.backup.archivo);
+    language: text/javascript
+order: 2000

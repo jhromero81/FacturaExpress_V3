@@ -1,0 +1,13 @@
+$kind: http-request
+url: "{{baseUrl}}/usuarios/999999"
+method: DELETE
+headers:
+  Authorization: Bearer {{token}}
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Eliminar usuario inexistente (HTTP 404)', function () {
+          pm.response.to.have.status(404);
+      });
+    language: text/javascript
+order: 7000

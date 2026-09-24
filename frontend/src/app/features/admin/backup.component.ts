@@ -4,7 +4,7 @@
  * restaurar y eliminar. Consume /api/backup.
  */
 
-import { Component, inject, signal, ChangeDetectorRef } from '@angular/core';
+import { Component, inject, signal } from '@angular/core';
 import { ApiService, mensajeError } from '../../core/api.service';
 import { ToastService } from '../../core/toast.service';
 import { formatDate } from '../../core/formatters';
@@ -31,8 +31,6 @@ function formatSize(bytes: number | null | undefined): string {
 })
 export class BackupComponent {
 
-  /** Vista activa para el refresco manual tras respuestas HTTP. */
-  readonly cdr = inject(ChangeDetectorRef);
   private api = inject(ApiService);
   private toast = inject(ToastService);
 
@@ -84,8 +82,9 @@ export class BackupComponent {
     try {
       await this.api.descargar(`/backup/${encodeURIComponent(backup.archivo)}/download`);
       this.toast.mostrar(`Respaldo descargado: ${backup.archivo}`, 'success');
-    } catch {
-      this.toast.mostrar('No fue posible descargar el respaldo.', 'error');
+    } catch (err) {
+      // Se muestra el motivo real (401, 404, red) en lugar de un texto fijo.
+      this.toast.mostrar(mensajeError(err), 'error');
     }
   }
 

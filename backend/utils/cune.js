@@ -1,9 +1,13 @@
 /**
  * utils/cune.js
- * Generacion del CUDE/CUNE (Codigo Unico de Documento Electronico)
- * de una factura. Es un identificador unico derivado de los datos
- * clave de la factura mediante SHA-256, en el mismo espiritu del
+ * Generacion del codigo unico de la factura electronica (CUFE)
+ * —denominado CUNE en versiones previas del proyecto— derivado de los
+ * datos clave de la factura mediante SHA-256, en el mismo espiritu del
  * modelo de facturacion electronica de la DIAN.
+ *
+ * El nombre del archivo y de la funcion se conservan por compatibilidad
+ * con las pruebas y la documentacion existentes; el campo que persiste y
+ * se publica en la API es `cufe` y el XML lo rotula como CUFE.
  */
 
 const crypto = require('crypto');

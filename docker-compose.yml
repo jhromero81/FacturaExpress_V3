@@ -44,17 +44,35 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:?Defina DB_PASSWORD en .env}
       JWT_SECRET: ${JWT_SECRET:?Defina JWT_SECRET en .env}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-8h}
+      JWT_ISSUER: ${JWT_ISSUER:-facturaexpress-api}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-facturaexpress-web}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:4200}
       # La API corre detras de nginx (frontend): se confia en X-Forwarded-For de 1 salto
       TRUST_PROXY: ${TRUST_PROXY:-1}
+      # Credenciales con privilegios DDL usadas solo al restaurar respaldos.
+      # Si se dejan vacias se reutilizan las de runtime.
+      DB_RESTORE_USER: ${DB_RESTORE_USER:-}
+      DB_RESTORE_PASSWORD: ${DB_RESTORE_PASSWORD:-}
+      # Contrasenas de los usuarios del seed. Si se dejan vacias, el seed
+      # genera contrasenas aleatorias y las muestra una sola vez en el log
+      # del contenedor: no hay credenciales por defecto conocidas.
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-}
+      SEED_VENDEDOR_PASSWORD: ${SEED_VENDEDOR_PASSWORD:-}
+      SEED_CONTADOR_PASSWORD: ${SEED_CONTADOR_PASSWORD:-}
       # El contenedor MySQL ya crea la BD: el seed no debe intentar crearla
       DB_SKIP_CREATE: "1"
     depends_on:
       db:
         condition: service_healthy
     command: sh -c "node scripts/seed.js && node scripts/migrate.js && node server.js"
-    ports:
-      - "4000:4000"
+    # La API NO se publica al exterior: nginx del frontend es el unico punto
+    # de entrada. Publicar el 4000 permitia saltarse el proxy y falsificar
+    # X-Forwarded-For, ya que la API confia en un salto (TRUST_PROXY=1).
+    # Descomente el mapeo siguiente (solo en 127.0.0.1) para diagnostico local.
+    # ports:
+    #   - "127.0.0.1:4000:4000"
+    expose:
+      - "4000"
 
   # ---------- Frontend (SPA servida por nginx) ----------
   frontend:

@@ -10,10 +10,12 @@
 
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const mysql = require('mysql2/promise');
 const bcrypt = require('bcryptjs');
 const dotenv = require('dotenv');
 
+const { validarPassword, BCRYPT_ROUNDS } = require('../config/password');
 const {
   EMPRESA_DEFAULT,
   PRODUCTOS_DEFAULT,
@@ -56,7 +58,14 @@ async function ejecutarEsquema(connection) {
   const schemaPath = path.join(__dirname, '..', 'db', 'schema.sql');
   const schema = fs.readFileSync(schemaPath, 'utf8');
 
-  let sentencias = schema
+  // Se eliminan los comentarios antes de dividir por ';' para que un
+  // comentario que contenga punto y coma no parta una sentencia.
+  const sinComentarios = schema
+    .split('\n')
+    .filter((linea) => !linea.trim().startsWith('--'))
+    .join('\n');
+
+  let sentencias = sinComentarios
     .split(';')
     .map((s) => s.trim())
     .filter((s) => s.length > 0);
@@ -64,9 +73,7 @@ async function ejecutarEsquema(connection) {
   // En contenedores (docker-compose) la base de datos ya existe y el
   // usuario de la app no tiene privilegio global CREATE DATABASE.
   if (omitirCreacionBd) {
-    sentencias = sentencias.filter(
-      (s) => !/^CREATE DATABASE|^USE /i.test(s.replace(/^--.*$/gm, '').trim())
-    );
+    sentencias = sentencias.filter((s) => !/^CREATE DATABASE|^USE /i.test(s.trim()));
 
     // schema.sql selecciona la base con USE; al omitirlo hay que hacerlo de
     // forma explicita o las sentencias siguientes fallan con
@@ -80,7 +87,7 @@ async function ejecutarEsquema(connection) {
     } catch (error) {
       // Tolerar objetos ya creados en re-ejecuciones (idempotencia)
       const mensaje = error.message || '';
-      if (!/duplicate key name|already exists/i.test(mensaje)) {
+      if (!/duplicate key name|already exists|duplicate foreign key|check constraint/i.test(mensaje)) {
         throw error;
       }
     }
@@ -115,6 +122,62 @@ async function seedEmpresa(connection) {
 }
 
 /**
+ * Resuelve la contrasena de un usuario del seed.
+ *
+ * Prioridad:
+ *  1. La variable de entorno indicada en `envPassword` (util para CI,
+ *     pruebas de aceptacion y despliegues reproducibles).
+ *  2. Una contrasena aleatoria generada aqui, que se muestra una unica
+ *     vez por consola.
+ *
+ * Nunca se usa una contrasena por defecto conocida: una instalacion
+ * recien desplegada no puede quedar con credenciales publicas.
+ *
+ * @param {object} usuario - Definicion del usuario del seed.
+ * @returns {{password: string, origen: 'entorno'|'generada'}}
+ */
+function resolverPassword(usuario) {
+  const desdeEntorno = process.env[usuario.envPassword];
+  if (desdeEntorno) {
+    const error = validarPassword(desdeEntorno);
+    if (!error) {
+      return { password: String(desdeEntorno), origen: 'entorno' };
+    }
+    console.warn(
+      `[seed] ${usuario.envPassword} no cumple la politica de contrasenas (${error}) ` +
+        'Se generara una aleatoria.'
+    );
+  }
+  return { password: generarPasswordAleatoria(), origen: 'generada' };
+}
+
+/**
+ * Genera una contrasena aleatoria que cumple la politica: incluye
+ * minuscula, mayuscula y digito, sobre un alfabeto sin caracteres
+ * ambiguos.
+ * @returns {string} Contrasena aleatoria.
+ */
+function generarPasswordAleatoria() {
+  const minusculas = 'abcdefghijkmnpqrstuvwxyz';
+  const mayusculas = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+  const digitos = '23456789';
+  const todos = minusculas + mayusculas + digitos;
+
+  const elegir = (alfabeto) => alfabeto[crypto.randomInt(alfabeto.length)];
+
+  // Garantiza una de cada categoria y completa hasta 16 caracteres
+  const caracteres = [elegir(minusculas), elegir(mayusculas), elegir(digitos)];
+  while (caracteres.length < 16) caracteres.push(elegir(todos));
+
+  // Mezcla para que las categorias no queden siempre al inicio
+  for (let i = caracteres.length - 1; i > 0; i -= 1) {
+    const j = crypto.randomInt(i + 1);
+    [caracteres[i], caracteres[j]] = [caracteres[j], caracteres[i]];
+  }
+  return caracteres.join('');
+}
+
+/**
  * Pobla la tabla usuarios con contrasenas encriptadas.
  */
 async function seedUsuarios(connection) {
@@ -124,15 +187,35 @@ async function seedUsuarios(connection) {
     return;
   }
 
+  const credenciales = [];
+
   for (const usuario of USUARIOS_DEFAULT) {
-    const passwordHash = await bcrypt.hash(usuario.password, 10);
+    const { password, origen } = resolverPassword(usuario);
+    const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
     await connection.query(
       `INSERT INTO usuarios (nit, nombre, email, telefono, rol, password_hash)
        VALUES (?, ?, ?, ?, ?, ?)`,
       [usuario.nit, usuario.nombre, usuario.email, usuario.telefono, usuario.rol, passwordHash]
     );
+    credenciales.push({ rol: usuario.rol, nit: usuario.nit, password, origen });
   }
+
   console.log(`[seed] ${USUARIOS_DEFAULT.length} usuarios creados (contrasenas encriptadas).`);
+
+  const generadas = credenciales.filter((c) => c.origen === 'generada');
+  if (generadas.length > 0) {
+    console.log('');
+    console.log('  ------------------------------------------------------------');
+    console.log('  Credenciales generadas (se muestran una sola vez). Guardelas');
+    console.log('  o defina SEED_ADMIN_PASSWORD / SEED_VENDEDOR_PASSWORD /');
+    console.log('  SEED_CONTADOR_PASSWORD antes de volver a ejecutar el seed.');
+    console.log('  ------------------------------------------------------------');
+    for (const c of credenciales) {
+      console.log(`  ${c.rol.padEnd(9)} NIT ${c.nit.padEnd(16)} clave ${c.password}`);
+    }
+    console.log('  ------------------------------------------------------------');
+    console.log('');
+  }
 }
 
 /**

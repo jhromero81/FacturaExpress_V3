@@ -4,7 +4,7 @@
  * correo): KPIs, filtros por tipo/estado y marcado como resuelto.
  */
 
-import { Component, inject, signal, ChangeDetectorRef } from '@angular/core';
+import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiService, mensajeError } from '../../core/api.service';
 import { ToastService } from '../../core/toast.service';
@@ -38,7 +38,6 @@ interface ErroresKPIs {
 export class ErroresComponent {
 
   /** Vista activa para el refresco manual tras respuestas HTTP. */
-  readonly cdr = inject(ChangeDetectorRef);
   private api = inject(ApiService);
   private toast = inject(ToastService);
 

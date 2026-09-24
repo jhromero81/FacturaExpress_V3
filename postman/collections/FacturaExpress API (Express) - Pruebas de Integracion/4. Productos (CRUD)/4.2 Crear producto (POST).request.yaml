@@ -1,0 +1,30 @@
+$kind: http-request
+url: "{{baseUrl}}/productos"
+method: POST
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{token}}
+body:
+  type: text
+  content: |-
+    {
+      "codigo": "PRD-{{ts}}",
+      "nombre": "Producto Integracion Postman",
+      "precio": 25000,
+      "iva": 0.19,
+      "stock": 100
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Producto creado (HTTP 201)', function () {
+          pm.response.to.have.status(201);
+      });
+      const json = pm.response.json();
+      pm.test('Producto persistido con id', function () {
+          pm.expect(json.producto.id).to.be.a('number');
+          pm.expect(json.producto.precio).to.eql(25000);
+      });
+      pm.collectionVariables.set('productoId', String(json.producto.id));
+    language: text/javascript
+order: 2000

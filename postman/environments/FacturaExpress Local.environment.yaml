@@ -1,0 +1,10 @@
+name: FacturaExpress Local
+values:
+  - key: baseUrl
+    value: 'http://127.0.0.1:4000/api'
+  - key: adminPassword
+    value: Admin1234
+  - key: vendedorPassword
+    value: Vendedor123
+  - key: contadorPassword
+    value: Contador123

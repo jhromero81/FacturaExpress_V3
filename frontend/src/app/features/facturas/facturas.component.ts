@@ -5,37 +5,34 @@
  * (PDF/XML), cambio de estado y eliminacion de facturas pendientes.
  */
 
-import { Component, inject, ChangeDetectorRef } from '@angular/core';
+import { Component, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
+import { firstValueFrom } from 'rxjs';
 import { ApiService, mensajeError } from '../../core/api.service';
 import { ToastService } from '../../core/toast.service';
 import { Factura } from '../../core/models';
-import { formatDate, formatMoney } from '../../core/formatters';
+import { formatDate, formatMoney, csvCell } from '../../core/formatters';
 import { ROUTES } from '../../core/constants';
 
 /** Cantidad de facturas por pagina */
-const ITEMS_PER_PAGE = 5;
+const ITEMS_PER_PAGE = 10;
+
+/** Limite maximo que admite la API por peticion */
+const LIMITE_MAXIMO_API = 200;
+
+/** Tope de filas que se exportan a CSV (evita barridos sin control) */
+const MAX_FILAS_EXPORT = 2000;
+
+interface RespuestaFacturas {
+  success: boolean;
+  facturas: Factura[];
+  total: number;
+  totalPaginas: number;
+}
 
 /** Etiqueta legible de un estado */
 function estadoLabel(estado: string): string {
   return estado ? estado.charAt(0).toUpperCase() + estado.slice(1) : '';
-}
-
-/**
- * Escapa una celda para CSV (RFC 4180) y neutraliza la inyeccion de
- * formulas: los valores que inician con = + - @ o tabulador se les
- * antepone una comilla simple, y se entrecomillan los que contienen
- * comas, comillas dobles o saltos de linea.
- */
-function csvCell(valor: unknown): string {
-  const str = String(valor ?? '');
-  if (/^[=+\-@\t\r]/.test(str)) {
-    return `'${str.replace(/"/g, '""')}`;
-  }
-  if (/[",\r\n]/.test(str)) {
-    return `"${str.replace(/"/g, '""')}"`;
-  }
-  return str;
 }
 
 @Component({
@@ -47,88 +44,101 @@ function csvCell(valor: unknown): string {
 })
 export class FacturasComponent {
 
-  /** Vista activa para el refresco manual tras respuestas HTTP. */
-  readonly cdr = inject(ChangeDetectorRef);
   private api = inject(ApiService);
   private router = inject(Router);
   private toast = inject(ToastService);
 
+  /** Texto de busqueda (lo actualiza la plantilla, nunca un callback HTTP) */
   searchTerm = '';
-  currentPage = 1;
+
+  /** Filtro de estado DIAN activo (lo actualiza la plantilla) */
   statusFilter = 'todos';
   filtros = ['todos', 'pendiente', 'enviada', 'rechazada'];
 
-  facturas: Factura[] = [];
-  loading = true;
-  selected: Factura | null = null;
-  detailLoading = false;
+  /**
+   * Estado de la vista como senales. Angular marca la vista por si mismo
+   * cuando una senal cambia, incluso dentro de un callback HTTP; con
+   * propiedades planas el ciclo de deteccion de Angular 22 no recompone la
+   * vista y la tabla se quedaba en "Cargando facturas..." con los datos ya
+   * presentes en memoria.
+   */
+  readonly facturas = signal<Factura[]>([]);
+  readonly loading = signal(true);
+  readonly selected = signal<Factura | null>(null);
+  readonly detailLoading = signal(false);
+
+  /** Paginacion resuelta por el servidor */
+  readonly total = signal(0);
+  readonly totalPages = signal(1);
+  readonly currentPage = signal(1);
+
+  /**
+   * Identificador de la ultima peticion de detalle. Si el usuario abre dos
+   * facturas seguidas, solo se aplica la respuesta de la ultima: antes la
+   * respuesta mas lenta sobrescribia el modal con datos de otra factura.
+   */
+  private detalleSolicitado = 0;
 
   // Formateadores expuestos a la plantilla
   money = formatMoney;
   date = formatDate;
 
-  /** Facturas filtradas por estado y texto de busqueda. */
-  get filteredFacturas(): Factura[] {
-    let result = this.facturas;
-
-    if (this.statusFilter !== 'todos') {
-      result = result.filter((f) => f.estado === this.statusFilter);
-    }
-
-    const term = this.searchTerm.trim().toLowerCase();
-    if (term) {
-      result = result.filter(
-        (f) =>
-          (!!f.numero && f.numero.toLowerCase().includes(term)) ||
-          (!!f.cliente?.nombre && f.cliente.nombre.toLowerCase().includes(term))
-      );
-    }
-
-    return result;
+  constructor() {
+    this.cargar();
   }
 
-  get totalPages(): number {
-    return Math.ceil(this.filteredFacturas.length / ITEMS_PER_PAGE);
-  }
+  /**
+   * Carga la pagina actual desde el servidor aplicando la busqueda y el
+   * filtro de estado. Antes se pedia un unico lote de 500 (recortado a 200
+   * por la API) y se paginaba en el navegador: las facturas mas antiguas
+   * no existian para la interfaz.
+   */
+  cargar(): void {
+    this.loading.set(true);
+    const params = new URLSearchParams({
+      pagina: String(this.currentPage()),
+      limite: String(ITEMS_PER_PAGE),
+    });
+    const termino = this.searchTerm.trim();
+    if (termino) params.set('q', termino);
+    if (this.statusFilter !== 'todos') params.set('estado', this.statusFilter);
 
-  get paginatedFacturas(): Factura[] {
-    const start = (this.currentPage - 1) * ITEMS_PER_PAGE;
-    return this.filteredFacturas.slice(start, start + ITEMS_PER_PAGE);
-  }
-
-constructor() {
-    this.api.get<{ success: boolean; facturas: Factura[] }>('/facturas?limite=500').subscribe({
+    this.api.get<RespuestaFacturas>(`/facturas?${params.toString()}`).subscribe({
       next: (res) => {
-        this.facturas = res.facturas ?? [];
-        this.ajustarPagina();
-        this.loading = false;
+        this.facturas.set(res.facturas ?? []);
+        this.total.set(Number(res.total) || 0);
+        this.totalPages.set(Math.max(Number(res.totalPaginas) || 1, 1));
+        if (this.currentPage() > this.totalPages()) {
+          this.currentPage.set(this.totalPages());
+          this.cargar();
+          return;
+        }
+        this.loading.set(false);
       },
       error: (err) => {
         this.toast.mostrar(mensajeError(err), 'error');
-        this.loading = false;
+        this.loading.set(false);
       },
     });
   }
 
-  /** Evita que currentPage quede fuera de rango tras filtrar, buscar o eliminar. */
-  private ajustarPagina(): void {
-    this.currentPage = Math.max(1, Math.min(this.currentPage || 1, Math.max(1, this.totalPages)));
-  }
-
   cambiarFiltro(filtro: string): void {
     this.statusFilter = filtro;
-    this.currentPage = 1;
-    this.ajustarPagina();
+    this.currentPage.set(1);
+    this.cargar();
   }
 
   onBuscar(valor: string): void {
     this.searchTerm = valor;
-    this.currentPage = 1;
-    this.ajustarPagina();
+    this.currentPage.set(1);
+    this.cargar();
   }
 
   goToPage(page: number): void {
-    this.currentPage = Math.max(1, Math.min(page, this.totalPages));
+    const destino = Math.max(1, Math.min(page, this.totalPages()));
+    if (destino === this.currentPage()) return;
+    this.currentPage.set(destino);
+    this.cargar();
   }
 
   label(estado: string): string {
@@ -137,24 +147,30 @@ constructor() {
 
   /** Abre el modal de detalle cargando la factura completa. */
   openDetail(factura: Factura): void {
-    this.selected = factura;
-    this.detailLoading = true;
+    this.selected.set(factura);
+    this.detailLoading.set(true);
+    const solicitud = ++this.detalleSolicitado;
+
     this.api
       .get<{ success: boolean; factura: Factura }>(`/facturas/${factura.id}`)
       .subscribe({
         next: (res) => {
-          this.selected = res.factura;
-          this.detailLoading = false;
+          if (solicitud !== this.detalleSolicitado) return; // respuesta obsoleta
+          this.selected.set(res.factura);
+          this.detailLoading.set(false);
         },
         error: (err) => {
+          if (solicitud !== this.detalleSolicitado) return;
           this.toast.mostrar(mensajeError(err), 'error');
-          this.detailLoading = false;
+          this.detailLoading.set(false);
         },
       });
   }
 
   closeDetail(): void {
-    this.selected = null;
+    // Invalida cualquier respuesta de detalle en vuelo.
+    this.detalleSolicitado += 1;
+    this.selected.set(null);
   }
 
   /** Descarga el PDF generado por el backend. */
@@ -178,13 +194,11 @@ constructor() {
     this.api
       .put<{ success: boolean; message: string; factura: Factura }>(`/facturas/${factura.id}/estado`, { estado })
       .subscribe({
-next: (res) => {
-          this.facturas = this.facturas.map((f) => (f.id === factura.id ? res.factura : f));
-          if (this.selected?.id === factura.id) {
-            this.selected = { ...this.selected, ...res.factura };
-          }
-          this.ajustarPagina();
+        next: (res) => {
           this.toast.mostrar(res.message || 'Estado actualizado', 'success');
+          // Se recarga la pagina: el cambio de estado puede sacar la factura
+          // del filtro activo.
+          this.cargar();
         },
         error: (err) => this.toast.mostrar(mensajeError(err), 'error'),
       });
@@ -196,25 +210,71 @@ next: (res) => {
       return;
     }
     this.api.delete<{ success: boolean; message: string }>(`/facturas/${factura.id}`).subscribe({
-next: (res) => {
+      next: (res) => {
         this.toast.mostrar(res.message || 'Factura eliminada', 'success');
-        this.facturas = this.facturas.filter((f) => f.id !== factura.id);
-        if (this.selected?.id === factura.id) this.selected = null;
-        this.ajustarPagina();
+        if (this.selected()?.id === factura.id) this.selected.set(null);
+        this.cargar();
       },
       error: (err) => this.toast.mostrar(mensajeError(err), 'error'),
     });
   }
 
-  /** Exporta todas las facturas filtradas como archivo CSV. */
-  exportCSV(): void {
-    if (this.filteredFacturas.length === 0) {
+  /**
+   * Exporta a CSV el resultado completo del filtro vigente.
+   *
+   * Recorre las paginas de la API hasta completar el total informado por
+   * el servidor (con un tope de seguridad), de modo que el archivo no
+   * dependa de las filas que estuvieran cargadas en pantalla: antes la
+   * exportacion se limitaba al lote visible y lo presentaba como si fuera
+   * el historial completo.
+   */
+  async exportCSV(): Promise<void> {
+    if (this.total() === 0) {
       this.toast.mostrar('No hay facturas para exportar', 'warning');
       return;
     }
 
-    const headers = ['Numero Factura', 'Fecha', 'Cliente', 'NIT', 'Estado', 'CUNE', 'Total'];
-    const rows = this.filteredFacturas.map((f) => [
+    let filas: Factura[];
+    let truncado = false;
+
+    try {
+      filas = [];
+      let pagina = 1;
+      let totalServidor = Infinity;
+
+      while (filas.length < Math.min(totalServidor, MAX_FILAS_EXPORT)) {
+        const params = new URLSearchParams({
+          pagina: String(pagina),
+          limite: String(LIMITE_MAXIMO_API),
+        });
+        const termino = this.searchTerm.trim();
+        if (termino) params.set('q', termino);
+        if (this.statusFilter !== 'todos') params.set('estado', this.statusFilter);
+
+        const res = await firstValueFrom(this.api.get<RespuestaFacturas>(`/facturas?${params.toString()}`));
+        totalServidor = Number(res.total) || 0;
+        const lote = res.facturas ?? [];
+        if (lote.length === 0) break;
+        filas.push(...lote);
+        pagina += 1;
+      }
+
+      truncado = filas.length < totalServidor;
+      if (filas.length > MAX_FILAS_EXPORT) {
+        filas = filas.slice(0, MAX_FILAS_EXPORT);
+      }
+    } catch (err) {
+      this.toast.mostrar(mensajeError(err), 'error');
+      return;
+    }
+
+    if (filas.length === 0) {
+      this.toast.mostrar('No hay facturas para exportar', 'warning');
+      return;
+    }
+
+    const headers = ['Numero Factura', 'Fecha', 'Cliente', 'NIT', 'Estado', 'CUFE', 'Total'];
+    const rows = filas.map((f) => [
       f.numero,
       formatDate(f.fecha),
       f.cliente?.nombre || '',
@@ -230,9 +290,17 @@ next: (res) => {
     const a = document.createElement('a');
     a.href = url;
     a.download = 'reporte_facturas.csv';
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(url);
-    this.toast.mostrar('Reporte CSV exportado correctamente', 'success');
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+
+    this.toast.mostrar(
+      truncado
+        ? `CSV exportado con ${filas.length} facturas (el filtro abarca ${this.total()}; se aplico el tope de ${MAX_FILAS_EXPORT}).`
+        : `CSV exportado con ${filas.length} facturas.`,
+      truncado ? 'warning' : 'success'
+    );
   }
 
   irAVentas(): void {

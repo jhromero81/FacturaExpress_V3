@@ -1,0 +1,16 @@
+$kind: http-request
+url: "{{baseUrl}}/auth/me"
+method: GET
+headers:
+  Authorization: Bearer token_invalido_de_prueba
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Token invalido rechazado (HTTP 401)', function () {
+          pm.response.to.have.status(401);
+      });
+      pm.test('Respuesta con success=false', function () {
+          pm.expect(pm.response.json().success).to.eql(false);
+      });
+    language: text/javascript
+order: 4000

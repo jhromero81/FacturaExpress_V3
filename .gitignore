@@ -29,3 +29,7 @@ Thumbs.db
 # Respaldos generados en tiempo de ejecucion
 backups/
 *.sql.bak
+
+# Configuracion local de herramientas (no compartir)
+.continue/
+.postman/

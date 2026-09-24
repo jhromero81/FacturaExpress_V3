@@ -14,7 +14,9 @@
 function notFound(req, res) {
   res.status(404).json({
     success: false,
-    message: `Recurso no encontrado: ${req.method} ${req.originalUrl}`,
+    // Solo el metodo y la ruta: reflejar la URL completa incluia la cadena
+    // de consulta enviada por el cliente en la respuesta.
+    message: `Recurso no encontrado: ${req.method} ${req.path}`,
   });
 }
 
@@ -47,13 +49,14 @@ function errorHandler(error, req, res, next) {
  * Envoltorio para controladores asincronos.
  * Captura errores de promesas rechazadas y los envia al
  * manejador central, evitando try/catch repetido en cada ruta.
+ * Devuelve la promesa para que quien invoque el controlador (por
+ * ejemplo una prueba) pueda esperar a que termine; Express ignora el
+ * valor de retorno y sigue usando `next`.
  * @param {function} handler - Controlador asincrono.
  * @returns {function} Controlador envuelto para Express.
  */
 function asyncHandler(handler) {
-  return (req, res, next) => {
-    Promise.resolve(handler(req, res, next)).catch(next);
-  };
+  return (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next);
 }
 
 /**

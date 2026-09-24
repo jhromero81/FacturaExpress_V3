@@ -7,10 +7,12 @@
  */
 
 import {
+  MIN_PASSWORD,
   validateRequired,
   validateNIT,
   validateEmail,
   validatePhone,
+  validatePassword,
   validateCliente,
   validateProducto,
   validateUsuario,
@@ -104,21 +106,6 @@ describe('validators - formularios completos', () => {
     expect(valido.valid).toBe(true);
   });
 
-  it('validateUsuario exige contrasena de al menos 4 caracteres al crear', () => {
-    const sinPassword = validateUsuario({ nit: '900123456-7', nombre: 'Usuario', password: '123' });
-    expect(sinPassword.valid).toBe(false);
-    expect(sinPassword.errors['password']).toBeDefined();
-
-    const ok = validateUsuario({
-      nit: '900123456-7',
-      nombre: 'Usuario',
-      password: 'admin123',
-      email: 'usuario@correo.com',
-      telefono: '3001234567',
-    });
-    expect(ok.valid).toBe(true);
-  });
-
   it('validateUsuario omite la contrasena al actualizar (requierePassword: false)', () => {
     const r = validateUsuario(
       { nit: '900123456-7', nombre: 'Usuario' },
@@ -127,5 +114,49 @@ describe('validators - formularios completos', () => {
 
     expect(r.valid).toBe(true);
     expect(r.errors['password']).toBeUndefined();
+  });
+});
+
+describe('validators - politica de contrasenas (alineada con la API)', () => {
+  it('exige la misma longitud minima que el backend', () => {
+    // El backend usa MIN_PASSWORD = 8 (backend/config/password.js). Antes la
+    // interfaz aceptaba 4 y la API respondia 400 al guardar.
+    expect(MIN_PASSWORD).toBe(8);
+    expect(validatePassword('Abc123').valid).toBe(false);
+    expect(validatePassword('Abcd1234').valid).toBe(true);
+  });
+
+  it('exige minuscula, mayuscula y digito', () => {
+    expect(validatePassword('abcd1234').message).toContain('mayuscula');
+    expect(validatePassword('ABCD1234').message).toContain('minuscula');
+    expect(validatePassword('Abcdefgh').message).toContain('digito');
+  });
+
+  it('rechaza una contrasena vacia', () => {
+    expect(validatePassword('').valid).toBe(false);
+    expect(validatePassword(undefined).valid).toBe(false);
+  });
+
+  it('validateUsuario aplica la politica completa al crear', () => {
+    const corta = validateUsuario({ nit: '900123456-7', nombre: 'Usuario', password: '123' });
+    expect(corta.valid).toBe(false);
+    expect(corta.errors['password']).toBeDefined();
+
+    const sinMayuscula = validateUsuario({
+      nit: '900123456-7',
+      nombre: 'Usuario',
+      password: 'abcd1234',
+    });
+    expect(sinMayuscula.valid).toBe(false);
+    expect(sinMayuscula.errors['password']).toContain('mayuscula');
+
+    const ok = validateUsuario({
+      nit: '900123456-7',
+      nombre: 'Usuario',
+      password: 'Admin12345',
+      email: 'usuario@correo.com',
+      telefono: '3001234567',
+    });
+    expect(ok.valid).toBe(true);
   });
 });

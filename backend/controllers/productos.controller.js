@@ -7,10 +7,26 @@
 
 const { pool } = require('../config/db');
 const { asyncHandler, createHttpError } = require('../middleware/errorHandler');
-const { isRequiredString, isValidPositiveInt, mapProductoRow, clampInt } = require('../utils/helpers');
+const { isRequiredString, isValidPositiveInt, mapProductoRow, clampInt, asString } = require('../utils/helpers');
+const { registrarAuditoria } = require('../utils/auditoria');
 
 /** Tasa de IVA por defecto para nuevos productos */
 const IVA_DEFAULT = 0.19;
+
+/**
+ * Resuelve la tarifa de IVA enviada por el cliente.
+ * Un campo vacio significa "usar la tarifa general"; un 0 explicito es
+ * una tarifa valida (producto exento o excluido). Antes `Number('')`
+ * convertia la cadena vacia en 0 y el producto quedaba creado con IVA 0%
+ * sin que nadie lo hubiera pedido.
+ * @param {*} valor - Valor recibido en el cuerpo.
+ * @returns {number} Tarifa en tanto por uno.
+ */
+function resolverTarifaIva(valor) {
+  if (valor === undefined || valor === null || valor === '') return IVA_DEFAULT;
+  const numero = Number(valor);
+  return Number.isFinite(numero) && numero >= 0 && numero <= 1 ? numero : IVA_DEFAULT;
+}
 
 /**
  * GET /api/productos
@@ -20,7 +36,8 @@ const IVA_DEFAULT = 0.19;
  *  - pagina / limite: paginacion de resultados.
  */
 const listProductos = asyncHandler(async (req, res) => {
-  const { q = '', pagina = 1, limite = 50 } = req.query;
+  const q = asString(req.query.q);
+  const { pagina = 1, limite = 50 } = req.query;
   const termino = `%${q.trim()}%`;
   const paginaEntera = clampInt(pagina, 1, 100000, 1);
   const limiteEntero = clampInt(limite, 1, 200, 50);
@@ -89,30 +106,48 @@ const createProducto = asyncHandler(async (req, res) => {
     throw createHttpError(400, 'El precio debe ser un valor numerico mayor o igual a cero.');
   }
 
-  // Evitar duplicados por codigo
+  // Evitar duplicados por codigo. Si el producto existe pero fue dado de
+  // baja (borrado logico), se reactiva con los datos nuevos: el codigo es
+  // UNIQUE y de otro modo quedaba bloqueado para siempre.
   const [existentes] = await pool.query(
-    'SELECT id FROM productos WHERE codigo = ?',
+    'SELECT id, activo FROM productos WHERE codigo = ?',
     [codigo.trim()]
   );
-  if (existentes.length > 0) {
+  if (existentes.length > 0 && existentes[0].activo) {
     throw createHttpError(409, 'Ya existe un producto con ese codigo.');
   }
 
-  const [result] = await pool.query(
-    `INSERT INTO productos (codigo, nombre, precio, iva, stock)
-     VALUES (?, ?, ?, ?, ?)`,
-    [
-      codigo.trim(),
-      nombre.trim(),
-      Number(precio),
-      Number(iva ?? IVA_DEFAULT),
-      Number.isInteger(Number(stock)) && Number(stock) >= 0 ? Number(stock) : 0,
-    ]
-  );
+  const stockFinal = Number.isInteger(Number(stock)) && Number(stock) >= 0 ? Number(stock) : 0;
+  const ivaFinal = resolverTarifaIva(iva);
+
+  let productoId;
+  if (existentes.length > 0) {
+    productoId = existentes[0].id;
+    await pool.query(
+      `UPDATE productos
+          SET nombre = ?, precio = ?, iva = ?, stock = ?, activo = 1
+        WHERE id = ?`,
+      [nombre.trim(), Number(precio), ivaFinal, stockFinal, productoId]
+    );
+  } else {
+    const [result] = await pool.query(
+      `INSERT INTO productos (codigo, nombre, precio, iva, stock)
+       VALUES (?, ?, ?, ?, ?)`,
+      [codigo.trim(), nombre.trim(), Number(precio), ivaFinal, stockFinal]
+    );
+    productoId = result.insertId;
+  }
 
   const [rows] = await pool.query(
     'SELECT id, codigo, nombre, precio, iva, stock FROM productos WHERE id = ?',
-    [result.insertId]
+    [productoId]
+  );
+
+  await registrarAuditoria(
+    req,
+    `${existentes.length > 0 ? 'REACTIVAR' : 'INSERT'} producto id=${productoId}`,
+    'productos',
+    productoId
   );
 
   res.status(201).json({
@@ -161,7 +196,8 @@ const updateProducto = asyncHandler(async (req, res) => {
       codigo?.trim() || null,
       nombre?.trim() || null,
       precio !== undefined ? Number(precio) : null,
-      iva !== undefined ? Number(iva) : null,
+      // Una tarifa vacia significa "no cambiar"; un 0 explicito es valido.
+      iva !== undefined && iva !== null && iva !== '' ? resolverTarifaIva(iva) : null,
       stock !== undefined ? Number(stock) : null,
       req.params.id,
     ]
@@ -171,6 +207,8 @@ const updateProducto = asyncHandler(async (req, res) => {
     'SELECT id, codigo, nombre, precio, iva, stock FROM productos WHERE id = ?',
     [req.params.id]
   );
+
+  await registrarAuditoria(req, `UPDATE producto id=${req.params.id}`, 'productos', req.params.id);
 
   res.json({
     success: true,
@@ -214,6 +252,13 @@ const adjustStock = asyncHandler(async (req, res) => {
     [req.params.id]
   );
 
+  await registrarAuditoria(
+    req,
+    `AJUSTE stock producto id=${req.params.id} cantidad=${cantidadNum}`,
+    'productos',
+    req.params.id
+  );
+
   res.json({
     success: true,
     message: 'Stock actualizado correctamente.',
@@ -235,6 +280,8 @@ const deleteProducto = asyncHandler(async (req, res) => {
   if (result.affectedRows === 0) {
     throw createHttpError(404, 'Producto no encontrado.');
   }
+
+  await registrarAuditoria(req, `DELETE producto id=${req.params.id}`, 'productos', req.params.id);
 
   res.json({ success: true, message: 'Producto eliminado correctamente.' });
 });

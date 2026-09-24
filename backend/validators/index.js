@@ -6,6 +6,7 @@
  */
 
 const { body, param } = require('express-validator');
+const { validarPassword } = require('../config/password');
 
 // ============================================================
 // Autenticacion
@@ -213,8 +214,11 @@ const crearUsuarioValidator = [
     .isIn(['admin', 'vendedor', 'contador'])
     .withMessage('El rol debe ser admin, vendedor o contador.'),
   body('password')
-    .isLength({ min: 6 })
-    .withMessage('La contrasena debe tener al menos 6 caracteres.'),
+    .custom((valor) => {
+      const error = validarPassword(valor);
+      if (error) throw new Error(error);
+      return true;
+    }),
 ];
 
 const actualizarUsuarioValidator = [
@@ -247,7 +251,11 @@ const toggleActivoValidator = [
     .toInt(),
   body('activo')
     .isBoolean()
-    .withMessage('El campo activo debe ser true o false.'),
+    .withMessage('El campo activo debe ser true o false.')
+    // Sin toBoolean(), el controlador recibia la cadena '0'/'false' y
+    // Boolean('0') === true: la desactivacion de una cuenta terminaba
+    // activandola.
+    .toBoolean(),
 ];
 
 // ============================================================

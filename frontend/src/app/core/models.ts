@@ -17,7 +17,12 @@ export interface Usuario {
 export interface LoginResponse {
   success: boolean;
   message: string;
-  token: string;
+  /**
+   * El token solo llega si el cliente lo pide con el encabezado
+   * X-Token-Response: true. La sesion del navegador viaja en la cookie
+   * httpOnly, por lo que el frontend no lo necesita ni lo persiste.
+   */
+  token?: string;
   usuario: Usuario;
 }
 
@@ -29,17 +34,12 @@ export interface Cliente {
   telefono: string;
 }
 
-export interface ListadoResponse<T> {
-  success: boolean;
-  total: number;
-  [clave: string]: unknown;
-}
-
 export interface Producto {
   id: number;
   codigo: string;
   nombre: string;
   precio: number;
+  /** Tarifa de IVA en tanto por uno (0, 0.05, 0.19) */
   iva: number;
   stock: number;
 }
@@ -63,7 +63,7 @@ export interface Factura {
   iva: number;
   descuento: number;
   total: number;
-  estado: 'pendiente' | 'enviada' | 'rechazada' | 'anulada' | string;
+  estado: 'pendiente' | 'enviada' | 'rechazada';
   cufe: string | null;
   firmaEstado: string;
   intentosDian: number;
@@ -73,10 +73,14 @@ export interface Factura {
 
 export interface KPIs {
   ventasDia: number;
+  /** Ventas del dia anterior: permite calcular una tendencia real */
+  ventasAyer?: number;
   facturasEmitidasHoy: number;
+  /** Facturas del mes en curso */
   facturasEmitidas: number;
   pendientesDIAN: number;
   ticketPromedio: number;
+  /** Ventas del mes en curso (no el acumulado historico) */
   ventasMes: number;
   clientesNuevos: number;
   productosVendidos: number;
@@ -89,6 +93,4 @@ export interface Empresa {
   nit: string;
   emailFacturacion?: string;
   telefono?: string;
-  resolucionDian?: string;
-  ultimaSync?: string | null;
 }

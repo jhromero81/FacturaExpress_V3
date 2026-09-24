@@ -7,6 +7,7 @@
 
 const { pool } = require('../config/db');
 const { asyncHandler, createHttpError } = require('../middleware/errorHandler');
+const { asString } = require('../utils/helpers');
 
 /**
  * Normaliza una fila de logs_auditoria para el frontend.
@@ -34,7 +35,8 @@ function mapLogRow(row) {
  *  - limite: cantidad maxima (default 100).
  */
 const listLogs = asyncHandler(async (req, res) => {
-  const { tabla = '', usuarioId = '', limite = 100 } = req.query;
+  const tabla = asString(req.query.tabla);
+  const { usuarioId = '', limite = 100 } = req.query;
   const condiciones = [];
   const parametros = [];
 

@@ -8,14 +8,29 @@
 const bcrypt = require('bcryptjs');
 const { pool } = require('../config/db');
 const { asyncHandler, createHttpError } = require('../middleware/errorHandler');
-const { isRequiredString } = require('../utils/helpers');
+const { isRequiredString, asString } = require('../utils/helpers');
 const { registrarAuditoria } = require('../utils/auditoria');
+const { invalidarCacheUsuario } = require('../middleware/auth');
+const { validarPassword, BCRYPT_ROUNDS } = require('../config/password');
 
 /** Roles permitidos del sistema */
 const ROLES_VALIDOS = ['admin', 'vendedor', 'contador'];
 
-/** Longitud minima de la contrasena (coincide con los validators) */
-const MIN_PASSWORD = 6;
+/**
+ * Normaliza el cuerpo de la peticion al valor booleano de `activo`.
+ * El validador ya convierte con toBoolean(), pero se mantiene una
+ * conversion explicita para no repetir el fallo historico: Boolean('0')
+ * es true, de modo que la cadena '0' activaba la cuenta en lugar de
+ * desactivarla.
+ * @param {*} valor - Valor recibido en el cuerpo.
+ * @returns {boolean}
+ */
+function aBooleano(valor) {
+  if (typeof valor === 'boolean') return valor;
+  if (typeof valor === 'number') return valor !== 0;
+  if (typeof valor === 'string') return !['0', 'false', ''].includes(valor.trim().toLowerCase());
+  return false;
+}
 
 /**
  * Normaliza una fila de usuarios a la estructura JSON del frontend.
@@ -40,7 +55,8 @@ function mapUsuarioRow(row) {
  * Lista los usuarios del sistema con busqueda opcional.
  */
 const listUsuarios = asyncHandler(async (req, res) => {
-  const { q = '', rol = '' } = req.query;
+  const q = asString(req.query.q);
+  const rol = asString(req.query.rol);
   const condiciones = [];
   const parametros = [];
 
@@ -95,8 +111,9 @@ const createUsuario = asyncHandler(async (req, res) => {
   if (!isRequiredString(nombre)) {
     throw createHttpError(400, 'El nombre es obligatorio.');
   }
-  if (!password || password.length < MIN_PASSWORD) {
-    throw createHttpError(400, `La contrasena debe tener al menos ${MIN_PASSWORD} caracteres.`);
+  const errorPassword = validarPassword(password);
+  if (errorPassword) {
+    throw createHttpError(400, errorPassword);
   }
 
   // Evitar duplicados de NIT
@@ -108,8 +125,20 @@ const createUsuario = asyncHandler(async (req, res) => {
     throw createHttpError(409, 'Ya existe un usuario con ese NIT.');
   }
 
+  // El correo tambien es UNIQUE en la base: sin esta comprobacion la
+  // insercion fallaba con un error 1062 y respondia 500.
+  if (email?.trim()) {
+    const [emailDuplicado] = await pool.query(
+      'SELECT id FROM usuarios WHERE email = ?',
+      [email.trim()]
+    );
+    if (emailDuplicado.length > 0) {
+      throw createHttpError(409, 'Ya existe un usuario con ese correo.');
+    }
+  }
+
   const rolFinal = ROLES_VALIDOS.includes(rol) ? rol : 'vendedor';
-  const passwordHash = await bcrypt.hash(password, 10);
+  const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
 
   const [result] = await pool.query(
     `INSERT INTO usuarios (nit, nombre, email, telefono, rol, password_hash)
@@ -156,14 +185,25 @@ const updateUsuario = asyncHandler(async (req, res) => {
     }
   }
 
+  if (email?.trim()) {
+    const [emailDuplicado] = await pool.query(
+      'SELECT id FROM usuarios WHERE email = ? AND id <> ?',
+      [email.trim(), req.params.id]
+    );
+    if (emailDuplicado.length > 0) {
+      throw createHttpError(409, 'Ya existe un usuario con ese correo.');
+    }
+  }
+
   let passwordSql = '';
   let passwordParam = null;
   if (password) {
-    if (password.length < MIN_PASSWORD) {
-      throw createHttpError(400, `La contrasena debe tener al menos ${MIN_PASSWORD} caracteres.`);
+    const errorPassword = validarPassword(password);
+    if (errorPassword) {
+      throw createHttpError(400, errorPassword);
     }
     passwordSql = ', password_hash = ?';
-    passwordParam = await bcrypt.hash(password, 10);
+    passwordParam = await bcrypt.hash(password, BCRYPT_ROUNDS);
   }
 
   const rolFinal = rol && ROLES_VALIDOS.includes(rol) ? rol : actual[0].rol;
@@ -194,7 +234,22 @@ const updateUsuario = asyncHandler(async (req, res) => {
     ]
   );
 
-  await registrarAuditoria(req, `UPDATE usuario id=${req.params.id}`, 'usuarios', req.params.id);
+  // El rol viaja en el token durante horas: al cambiarlo hay que invalidar
+  // la cache del middleware para que el nuevo rol surta efecto de inmediato.
+  const cambioRol = rolFinal !== actual[0].rol;
+  const cambioPassword = passwordParam !== null;
+  if (cambioRol || cambioPassword) {
+    invalidarCacheUsuario(req.params.id);
+  }
+
+  await registrarAuditoria(
+    req,
+    `UPDATE usuario id=${req.params.id}` +
+      (cambioRol ? ` rol=${actual[0].rol}->${rolFinal}` : '') +
+      (cambioPassword ? ' (contrasena actualizada)' : ''),
+    'usuarios',
+    req.params.id
+  );
 
   const [rows] = await pool.query(
     'SELECT id, nit, nombre, email, telefono, rol, activo, created_at FROM usuarios WHERE id = ?',
@@ -221,7 +276,7 @@ const toggleActivo = asyncHandler(async (req, res) => {
   }
 
   const { activo } = req.body || {};
-  const activoFinal = Boolean(activo) ? 1 : 0;
+  const activoFinal = aBooleano(activo) ? 1 : 0;
 
   const [result] = await pool.query(
     'UPDATE usuarios SET activo = ? WHERE id = ?',
@@ -230,6 +285,10 @@ const toggleActivo = asyncHandler(async (req, res) => {
   if (result.affectedRows === 0) {
     throw createHttpError(404, 'Usuario no encontrado.');
   }
+
+  // El estado activo se revalida en cada peticion con cache de 60s:
+  // invalidarla hace que la desactivacion surta efecto de inmediato.
+  invalidarCacheUsuario(id);
 
   await registrarAuditoria(req, `TOGGLE usuario id=${req.params.id} activo=${activoFinal}`, 'usuarios', req.params.id);
 
@@ -264,6 +323,8 @@ const deleteUsuario = asyncHandler(async (req, res) => {
   if (result.affectedRows === 0) {
     throw createHttpError(404, 'Usuario no encontrado.');
   }
+
+  invalidarCacheUsuario(id);
 
   await registrarAuditoria(req, `DELETE usuario id=${id}`, 'usuarios', id);
 

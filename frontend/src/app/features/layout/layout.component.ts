@@ -6,11 +6,9 @@
  * global y modal de confirmacion de cierre de sesion.
  */
 
-import { Component, computed, inject, signal } from '@angular/core';
-import { ChangeDetectorRef } from '@angular/core';
+import { Component, OnDestroy, computed, inject, signal } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { AuthService } from '../../core/auth.service';
-import { ServicioRender } from '../../core/render.service';
 import { ToastService } from '../../core/toast.service';
 import { nombreRol } from '../../core/formatters';
 
@@ -27,10 +25,9 @@ interface ItemMenu {
   templateUrl: './layout.component.html',
   styleUrls: ['./layout.component.css'],
 })
-export class LayoutComponent {
+export class LayoutComponent implements OnDestroy {
   readonly auth = inject(AuthService);
   readonly toasts = inject(ToastService);
-  private readonly render = inject(ServicioRender);
 
   /** Control de visibilidad del modal de cierre de sesion. */
   readonly mostrarModalSalida = signal(false);
@@ -38,16 +35,27 @@ export class LayoutComponent {
   /** Estado de "cerrando sesion" para la animacion del modal. */
   readonly cerrandoSesion = signal(false);
 
+  /** Temporizador del cierre de sesion diferido, para poder cancelarlo. */
+  private temporizadorSalida: ReturnType<typeof setTimeout> | null = null;
+
   /**
-   * Registra la vista del componente hijo activo para que el
-   * ServicioRender pueda refrescarla tras respuestas HTTP.
+   * Cancela cualquier temporizador pendiente al destruir la vista: antes
+   * seguia vivo y navegaba despues de salir del layout.
    */
-  componenteActivado(instancia: { cdr?: ChangeDetectorRef } | null): void {
-    this.render.establecerActivo(instancia?.cdr ?? null);
+  ngOnDestroy(): void {
+    if (this.temporizadorSalida !== null) {
+      clearTimeout(this.temporizadorSalida);
+      this.temporizadorSalida = null;
+    }
   }
 
-  componenteDesactivado(): void {
-    this.render.establecerActivo(null);
+  /** Programa el temporizador de cierre de sesion cancelando el anterior. */
+  programarCierreSesion(accion: () => void, retardoMs: number): void {
+    if (this.temporizadorSalida !== null) clearTimeout(this.temporizadorSalida);
+    this.temporizadorSalida = setTimeout(() => {
+      this.temporizadorSalida = null;
+      accion();
+    }, retardoMs);
   }
 
   private readonly menuPrincipal: ItemMenu[] = [
@@ -108,7 +116,7 @@ export class LayoutComponent {
   /** Ejecuta el cierre de sesion tras una pequena animacion de carga. */
   confirmarSalida(): void {
     this.cerrandoSesion.set(true);
-    setTimeout(() => {
+    this.programarCierreSesion(() => {
       this.mostrarModalSalida.set(false);
       this.cerrandoSesion.set(false);
       this.auth.logout();

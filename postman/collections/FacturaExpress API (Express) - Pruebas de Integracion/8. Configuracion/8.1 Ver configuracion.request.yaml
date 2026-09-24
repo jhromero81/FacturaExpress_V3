@@ -1,0 +1,18 @@
+$kind: http-request
+url: "{{baseUrl}}/configuracion"
+method: GET
+headers:
+  Authorization: Bearer {{token}}
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Configuracion consultada (HTTP 200)', function () {
+          pm.response.to.have.status(200);
+      });
+      pm.test('Devuelve datos de empresa y fiscal', function () {
+          const json = pm.response.json();
+          pm.expect(json.configuracion.empresa.nit).to.not.be.empty;
+          pm.expect(json.configuracion.fiscal.resolucionDIAN).to.not.be.empty;
+      });
+    language: text/javascript
+order: 1000

@@ -11,19 +11,22 @@ const {
   updateCliente,
   deleteCliente,
 } = require('../controllers/clientes.controller');
-const { authenticate } = require('../middleware/auth');
+const { authenticate, authorize } = require('../middleware/auth');
 const { validate } = require('../middleware/validate');
 const { clienteBaseValidator, clienteUpdateValidator, idValidator } = require('../validators');
 
 const router = Router();
 
-// Todas las rutas de clientes requieren autenticacion
+// Todas las rutas de clientes requieren autenticacion. Los permisos de
+// escritura siguen la matriz de permisos por rol documentada:
+// lectura para todos, alta/edicion para admin y vendedor, eliminacion
+// solo para admin.
 router.use(authenticate);
 
 router.get('/', listClientes);
 router.get('/:id', idValidator, validate, getCliente);
-router.post('/', clienteBaseValidator, validate, createCliente);
-router.put('/:id', idValidator, clienteUpdateValidator, validate, updateCliente);
-router.delete('/:id', idValidator, validate, deleteCliente);
+router.post('/', authorize('admin', 'vendedor'), clienteBaseValidator, validate, createCliente);
+router.put('/:id', authorize('admin', 'vendedor'), idValidator, clienteUpdateValidator, validate, updateCliente);
+router.delete('/:id', authorize('admin'), idValidator, validate, deleteCliente);
 
 module.exports = router;

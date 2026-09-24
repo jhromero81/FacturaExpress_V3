@@ -1,0 +1,17 @@
+$kind: http-request
+url: "{{baseUrl}}/logs?tabla=facturas"
+method: GET
+headers:
+  Authorization: Bearer {{token}}
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Filtro por tabla (HTTP 200)', function () {
+          pm.response.to.have.status(200);
+      });
+      pm.test('Las operaciones de facturas fueron auditadas', function () {
+          const json = pm.response.json();
+          pm.expect(json.logs.length).to.be.at.least(1);
+      });
+    language: text/javascript
+order: 2000

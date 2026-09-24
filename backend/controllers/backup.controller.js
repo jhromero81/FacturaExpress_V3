@@ -18,18 +18,24 @@ const listBackups = asyncHandler(async (req, res) => {
   const archivos = backupService.listarBackups();
 
   const [registros] = await pool.query(
-    'SELECT archivo, usuario_id, created_at FROM backups'
+    'SELECT archivo, usuario_id, checksum, created_at FROM backups'
   );
-  const usuarioPorArchivo = new Map(registros.map((r) => [r.archivo, r.usuario_id]));
+  const registroPorArchivo = new Map(registros.map((r) => [r.archivo, r]));
 
   res.json({
     success: true,
-    backups: archivos.map((a) => ({
-      archivo: a.archivo,
-      tamano: a.tamano,
-      fecha: a.fecha,
-      usuarioId: usuarioPorArchivo.get(a.archivo) || null,
-    })),
+    backups: archivos.map((a) => {
+      const registro = registroPorArchivo.get(a.archivo);
+      return {
+        archivo: a.archivo,
+        tamano: a.tamano,
+        fecha: a.fecha,
+        usuarioId: registro?.usuario_id || null,
+        // Un respaldo sin huella registrada no se puede verificar al
+        // restaurar (corresponde a versiones anteriores del modulo).
+        verificado: Boolean(registro?.checksum),
+      };
+    }),
   });
 });
 
@@ -41,8 +47,8 @@ const crearBackup = asyncHandler(async (req, res) => {
   const respaldo = await backupService.crearBackup();
 
   await pool.query(
-    'INSERT INTO backups (archivo, tamano, usuario_id) VALUES (?, ?, ?)',
-    [respaldo.archivo, respaldo.tamano, req.usuario.id]
+    'INSERT INTO backups (archivo, tamano, checksum, usuario_id) VALUES (?, ?, ?, ?)',
+    [respaldo.archivo, respaldo.tamano, respaldo.checksum, req.usuario.id]
   );
 
   await registrarAuditoria(req, `BACKUP creado: ${respaldo.archivo}`, 'backups');
@@ -53,6 +59,7 @@ const crearBackup = asyncHandler(async (req, res) => {
     backup: {
       archivo: respaldo.archivo,
       tamano: respaldo.tamano,
+      checksum: respaldo.checksum,
       fecha: new Date(),
       usuarioId: req.usuario.id,
     },
@@ -62,6 +69,7 @@ const crearBackup = asyncHandler(async (req, res) => {
 /**
  * POST /api/backups/restaurar
  * Restaura la base de datos desde un respaldo. Body: { archivo }.
+ * Solo se aceptan respaldos registrados (con huella conocida).
  */
 const restaurarBackup = asyncHandler(async (req, res) => {
   const { archivo } = req.body || {};
@@ -70,7 +78,15 @@ const restaurarBackup = asyncHandler(async (req, res) => {
     throw createHttpError(400, 'Debe indicar el archivo de respaldo a restaurar.');
   }
 
-  await backupService.restaurarBackup(archivo);
+  const [registros] = await pool.query(
+    'SELECT checksum FROM backups WHERE archivo = ?',
+    [String(archivo)]
+  );
+  if (registros.length === 0) {
+    throw createHttpError(404, 'El respaldo indicado no esta registrado en el sistema.');
+  }
+
+  await backupService.restaurarBackup(String(archivo), registros[0].checksum);
 
   await registrarAuditoria(req, `RESTORE desde ${archivo}`, 'backups');
 

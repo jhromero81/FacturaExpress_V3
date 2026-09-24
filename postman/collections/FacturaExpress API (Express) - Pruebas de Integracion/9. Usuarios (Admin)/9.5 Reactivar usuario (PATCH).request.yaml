@@ -1,0 +1,21 @@
+$kind: http-request
+url: "{{baseUrl}}/usuarios/{{usuarioId}}/activo"
+method: PATCH
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{token}}
+body:
+  type: text
+  content: |-
+    {
+      "activo": true
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Usuario reactivado (HTTP 200)', function () {
+          pm.response.to.have.status(200);
+          pm.expect(pm.response.json().usuario.activo).to.be.true;
+      });
+    language: text/javascript
+order: 5000

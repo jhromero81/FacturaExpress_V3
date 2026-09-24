@@ -3,36 +3,24 @@
  * Interceptor HTTP funcional:
  *  - Envia todas las peticiones con credenciales (cookie httpOnly de
  *    sesion); no replica el token en JS.
- *  - Ante un 401 (sesion expirada o invalida) limpia la sesion local
- *    (señal de AuthService + sessionStorage) y redirige al login,
- *    excepto cuando la peticion es el propio intento de inicio de sesion.
- *  - Tras cada respuesta (o error) programa un ciclo de deteccion de
- *    cambios via ServicioRender; sin esto, los datos actualizados en
- *    los callbacks pueden quedar sin renderizar hasta que el usuario
- *    interactua con la pagina.
+ *  - Ante un 401 (sesion expirada, revocada o cuenta inactiva) limpia la
+ *    sesion local y redirige al login, excepto cuando la peticion es el
+ *    propio intento de inicio de sesion.
  */
 
-import { HttpErrorResponse, HttpResponse, HttpInterceptorFn } from '@angular/common/http';
+import { HttpErrorResponse, HttpInterceptorFn } from '@angular/common/http';
 import { inject } from '@angular/core';
-import { catchError, tap, throwError } from 'rxjs';
-import { ServicioRender } from './render.service';
+import { catchError, throwError } from 'rxjs';
 import { AuthService } from './auth.service';
 
 export const tokenInterceptor: HttpInterceptorFn = (req, next) => {
-  const render = inject(ServicioRender);
   const auth = inject(AuthService);
 
+  // withCredentials garantiza que la cookie httpOnly viaje en cada
+  // peticion, incluso si el componente olvida solicitarlo.
   const peticion = req.clone({ withCredentials: true });
 
   return next(peticion).pipe(
-    tap({
-      next: (evento) => {
-        if (evento instanceof HttpResponse) {
-          render.notificar();
-        }
-      },
-      error: () => render.notificar(),
-    }),
     catchError((error: unknown) => {
       if (
         error instanceof HttpErrorResponse &&

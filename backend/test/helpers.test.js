@@ -112,6 +112,50 @@ test('escapeCSV deja sin comillas el texto simple y maneja nulos', () => {
   assert.equal(helpers.escapeCSV(undefined), '');
 });
 
+test('escapeCSV neutraliza la inyeccion de formulas', () => {
+  // Excel/Sheets ejecutan como formula las celdas que empiezan por = + @
+  assert.equal(helpers.escapeCSV('=SUM(A1:A9)'), "'=SUM(A1:A9)");
+  assert.equal(helpers.escapeCSV('+1+1'), "'+1+1");
+  assert.equal(helpers.escapeCSV('@SUM(A1)'), "'@SUM(A1)");
+  assert.equal(helpers.escapeCSV('-2+3+cmd'), "'-2+3+cmd");
+  assert.equal(helpers.escapeCSV('\t=1+1'), "'\t=1+1");
+});
+
+test('escapeCSV no altera los numeros ni los negativos legitimos', () => {
+  assert.equal(helpers.escapeCSV(-1500), '-1500');
+  assert.equal(helpers.escapeCSV(-1500.5), '-1500.5');
+  assert.equal(helpers.escapeCSV('-1500'), '-1500');
+  assert.equal(helpers.escapeCSV('FAC-202609-00001'), 'FAC-202609-00001');
+});
+
+test('escapeHTML neutraliza el marcado', () => {
+  assert.equal(
+    helpers.escapeHTML('<img src=x onerror=alert(1)>'),
+    '&lt;img src=x onerror=alert(1)&gt;'
+  );
+  assert.equal(helpers.escapeHTML('a & b "c" \'d\''), 'a &amp; b &quot;c&quot; &#39;d&#39;');
+  assert.equal(helpers.escapeHTML(null), '');
+});
+
+test('asString tolera valores no textuales del query string', () => {
+  assert.equal(helpers.asString('texto'), 'texto');
+  assert.equal(helpers.asString(42), '42');
+  // ?q=a&q=b entrega un arreglo: antes provocaba un 500 al llamar .trim()
+  assert.equal(helpers.asString(['a', 'b']), '');
+  assert.equal(helpers.asString({ a: 1 }), '');
+  assert.equal(helpers.asString(undefined), '');
+  assert.equal(helpers.asString(undefined, 'defecto'), 'defecto');
+});
+
+test('calcularIVA respeta la tarifa indicada por producto', () => {
+  assert.equal(helpers.calcularIVA(100000, 0.19), 19000);
+  assert.equal(helpers.calcularIVA(100000, 0.05), 5000);
+  assert.equal(helpers.calcularIVA(100000, 0), 0);
+  // Una tarifa invalida cae a la general en lugar de producir NaN
+  assert.equal(helpers.calcularIVA(100000, 'no-es-numero'), 19000);
+  assert.equal(helpers.calcularIVA(100000), 19000);
+});
+
 // ============================================================
 // mapItemRow
 // ============================================================
@@ -214,34 +258,73 @@ test('mapClienteRow y mapProductoRow normalizan sus filas', () => {
 });
 
 // ============================================================
-// generateInvoiceNumber
+// generateInvoiceNumber / calcularSiguienteNumero
 // ============================================================
-test('generateInvoiceNumber genera la siguiente posicion del mes (stub pool)', async () => {
+
+/**
+ * Instala un stub del pool que responde a las sentencias de la secuencia
+ * persistente de numeracion.
+ * @param {number} ultimo - Valor que devuelve la secuencia.
+ */
+function stubSecuencia(ultimo) {
+  dbStub.pool.query = async (sql) => {
+    const q = String(sql);
+    if (q.includes('GET_LOCK')) return [[{ ok: 1 }]];
+    if (q.includes('RELEASE_LOCK')) return [[{ ok: 1 }]];
+    if (q.includes('INSERT INTO secuencias_facturas')) return [{ affectedRows: 1 }];
+    if (q.includes('SELECT ultimo FROM secuencias_facturas')) return [[{ ultimo }]];
+    return [[]];
+  };
+}
+
+test('generateInvoiceNumber toma el consecutivo de la secuencia persistente', async () => {
   const ahora = new Date();
   const year = ahora.getFullYear();
   const month = String(ahora.getMonth() + 1).padStart(2, '0');
 
-  dbStub.pool.query = async (sql) => {
-    const q = String(sql);
-    if (q.includes('GET_LOCK')) return [[{ ok: 1 }]];
-    if (q.includes('RELEASE_LOCK')) return [[{ ok: 1 }]];
-    return [[{ total: 4 }]];
-  };
+  stubSecuencia(5);
   assert.equal(await helpers.generateInvoiceNumber(), `FAC-${year}${month}-00005`);
 
-  dbStub.pool.query = async (sql) => {
-    const q = String(sql);
-    if (q.includes('GET_LOCK')) return [[{ ok: 1 }]];
-    if (q.includes('RELEASE_LOCK')) return [[{ ok: 1 }]];
-    return [[{ total: 0 }]];
-  };
+  stubSecuencia(1);
   assert.equal(await helpers.generateInvoiceNumber(), `FAC-${year}${month}-00001`);
 
+  stubSecuencia(100);
+  assert.equal(await helpers.generateInvoiceNumber(), `FAC-${year}${month}-00100`);
+});
+
+test('la numeracion usa la secuencia y no el conteo de facturas (regresion)', async () => {
+  const llamadas = [];
   dbStub.pool.query = async (sql) => {
     const q = String(sql);
+    llamadas.push(q);
     if (q.includes('GET_LOCK')) return [[{ ok: 1 }]];
     if (q.includes('RELEASE_LOCK')) return [[{ ok: 1 }]];
-    return [[{ total: 99 }]];
+    if (q.includes('INSERT INTO secuencias_facturas')) return [{ affectedRows: 1 }];
+    if (q.includes('SELECT ultimo FROM secuencias_facturas')) return [[{ ultimo: 3 }]];
+    return [[{ total: 0 }]];
   };
-  assert.equal(await helpers.generateInvoiceNumber(), `FAC-${year}${month}-00100`);
+
+  await helpers.generateInvoiceNumber();
+
+  // Eliminar una factura ya no puede alterar el consecutivo: la consulta
+  // de conteo sobre facturas no debe ejecutarse.
+  assert.equal(
+    llamadas.some((q) => q.includes('COUNT(*)') && q.includes('FROM facturas')),
+    false,
+    'la numeracion no debe contar facturas'
+  );
+  assert.equal(
+    llamadas.some((q) => q.includes('INSERT INTO secuencias_facturas')),
+    true,
+    'la numeracion debe reservar el numero en secuencias_facturas'
+  );
+});
+
+test('calcularSiguienteNumero acepta un prefijo explicito', async () => {
+  dbStub.pool.query = async (sql) => {
+    const q = String(sql);
+    if (q.includes('SELECT ultimo FROM secuencias_facturas')) return [[{ ultimo: 7 }]];
+    return [{ affectedRows: 1 }];
+  };
+  assert.equal(await helpers.calcularSiguienteNumero(dbStub.pool, 'FAC-202501-'), 'FAC-202501-00007');
 });

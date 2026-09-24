@@ -1,0 +1,20 @@
+$kind: http-request
+url: "{{baseUrl}}/configuracion/dian/sync"
+method: POST
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{token}}
+body:
+  type: text
+  content: "{}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Sincronizacion DIAN (HTTP 200)', function () {
+          pm.response.to.have.status(200);
+      });
+      pm.test('La fecha de sincronizacion se actualizo', function () {
+          pm.expect(pm.response.json().fiscal.ultimaSync).to.not.be.null;
+      });
+    language: text/javascript
+order: 3000

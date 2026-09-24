@@ -1,0 +1,13 @@
+$kind: http-request
+url: "{{baseUrl}}/usuarios"
+method: GET
+headers:
+  Authorization: Bearer {{token}}
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('El listado exige rol admin (HTTP 200 admin)', function () {
+          pm.response.to.have.status(200);
+      });
+    language: text/javascript
+order: 6000

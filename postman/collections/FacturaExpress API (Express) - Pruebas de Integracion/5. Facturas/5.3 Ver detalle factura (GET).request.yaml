@@ -1,0 +1,18 @@
+$kind: http-request
+url: "{{baseUrl}}/facturas/{{facturaId}}"
+method: GET
+headers:
+  Authorization: Bearer {{token}}
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Factura persistida con sus items (HTTP 200)', function () {
+          pm.response.to.have.status(200);
+      });
+      pm.test('La factura incluye al menos un item', function () {
+          const json = pm.response.json();
+          pm.expect(json.factura.items.length).to.be.at.least(1);
+          pm.expect(json.factura.items[0].nombre).to.not.be.empty;
+      });
+    language: text/javascript
+order: 3000

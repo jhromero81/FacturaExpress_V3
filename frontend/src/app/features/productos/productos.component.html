@@ -31,14 +31,14 @@
         </tr>
       </thead>
       <tbody>
-        @if (loading) {
+        @if (loading()) {
           <tr>
             <td colspan="6" class="empty-table">
               <span class="material-icons">sync</span>
               <p>Cargando catalogo...</p>
             </td>
           </tr>
-        } @else if (filteredProductos.length === 0) {
+        } @else if (productos().length === 0) {
           <tr>
             <td colspan="6" class="empty-table">
               <span class="material-icons">inventory_2</span>
@@ -46,7 +46,7 @@
             </td>
           </tr>
         } @else {
-          @for (producto of filteredProductos; track producto.id) {
+          @for (producto of productos(); track producto.id) {
             <tr>
               <td class="font-mono">{{ producto.codigo }}</td>
               <td>{{ producto.nombre }}</td>
@@ -75,8 +75,21 @@
     </table>
   </div>
 
+  <!-- Paginacion resuelta por el servidor -->
+  @if (!loading() && totalPaginas() > 1) {
+    <div class="pagination-bar">
+      <button type="button" class="btn-pagina" [disabled]="pagina() <= 1" (click)="irAPagina(pagina() - 1)">
+        <span class="material-icons">chevron_left</span>
+      </button>
+      <span class="pagination-info font-mono">Pagina {{ pagina() }} de {{ totalPaginas() }} ({{ total() }} productos)</span>
+      <button type="button" class="btn-pagina" [disabled]="pagina() >= totalPaginas()" (click)="irAPagina(pagina() + 1)">
+        <span class="material-icons">chevron_right</span>
+      </button>
+    </div>
+  }
+
   <!-- Modal de crear/editar producto -->
-  <div class="modal-overlay" [class.open]="showModal" (click)="cerrarModal()">
+  <div class="modal-overlay" [class.open]="showModal()" (click)="cerrarModal()">
     <div class="modal-content" (click)="$event.stopPropagation()">
       <div class="modal-header">
         <h3>{{ editingId ? 'Editar Producto' : 'Nuevo Producto' }}</h3>
@@ -160,7 +173,7 @@
   </div>
 
   <!-- Modal de ajuste de stock -->
-  @if (stockTarget; as target) {
+  @if (stockTarget(); as target) {
     <div class="modal-overlay open" (click)="cerrarStock()">
       <div class="modal-content" (click)="$event.stopPropagation()">
         <div class="modal-header">

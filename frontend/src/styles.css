@@ -953,3 +953,50 @@ body.fx-high-contrast .sidebar {
     min-width: auto;
   }
 }
+
+/* ============================================================
+   Paginacion compartida (clientes, productos, facturas)
+   Los listados se paginan en el servidor: el cliente nunca recibe
+   solo la primera pagina de forma silenciosa.
+   ============================================================ */
+.pagination-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 20px;
+  padding: 10px 0;
+}
+
+.pagination-info {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.btn-pagina {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  background-color: var(--card-bg);
+  color: var(--text-dark);
+  cursor: pointer;
+  transition: border-color 0.2s ease, color 0.2s ease;
+}
+
+.btn-pagina:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.btn-pagina:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn-pagina .material-icons {
+  font-size: 20px;
+}

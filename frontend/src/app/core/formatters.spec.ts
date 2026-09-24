@@ -14,6 +14,8 @@ import {
   truncateText,
   calcularIVA,
   calculateVariation,
+  periodoLabel,
+  csvCell,
 } from './formatters';
 
 describe('formatters - textos y roles', () => {
@@ -119,5 +121,66 @@ describe('formatters - reglas de calculo financiero', () => {
   it('calculateVariation evita la division por cero', () => {
     expect(calculateVariation(100, 0)).toBe(100);
     expect(calculateVariation(0, 0)).toBe(0);
+  });
+});
+
+describe('formatters - etiqueta de periodo del grafico', () => {
+  it('abrevia el periodo mensual con el nombre del mes', () => {
+    expect(periodoLabel('2026-01')).toBe('Ene');
+    expect(periodoLabel('2026-08')).toBe('Ago');
+    expect(periodoLabel('2026-12')).toBe('Dic');
+  });
+
+  it('abrevia el trimestre (regresion: antes devolvia "SNaN")', () => {
+    // El backend emite "2026-Q3"; al separar por "-" solo hay dos segmentos,
+    // de modo que la Q caia en la posicion del mes y la etiqueta era "SNaN".
+    expect(periodoLabel('2026-Q1')).toBe('T1');
+    expect(periodoLabel('2026-Q3')).toBe('T3');
+    expect(periodoLabel('2026-Q4')).toBe('T4');
+  });
+
+  it('mantiene el anio y numera la semana', () => {
+    expect(periodoLabel('2026')).toBe('2026');
+    expect(periodoLabel('2026-35')).toBe('S35');
+  });
+
+  it('tolera valores vacios o inesperados', () => {
+    expect(periodoLabel(null)).toBe('');
+    expect(periodoLabel(undefined)).toBe('');
+    expect(periodoLabel('otro')).toBe('otro');
+  });
+});
+
+describe('formatters - IVA por tarifa', () => {
+  it('aplica la tarifa indicada en lugar de asumir siempre el 19%', () => {
+    expect(calcularIVA(100000, 0.19)).toBe(19000);
+    expect(calcularIVA(100000, 0.05)).toBe(5000);
+    expect(calcularIVA(100000, 0)).toBe(0);
+  });
+
+  it('usa la tarifa general cuando no se indica', () => {
+    expect(calcularIVA(100000)).toBe(19000);
+  });
+});
+
+describe('formatters - celdas CSV', () => {
+  it('entrecomilla los valores con comas, comillas o saltos de linea', () => {
+    expect(csvCell('a,b')).toBe('"a,b"');
+    expect(csvCell('di "hola"')).toBe('"di ""hola"""');
+    expect(csvCell('linea1\nlinea2')).toBe('"linea1\nlinea2"');
+  });
+
+  it('neutraliza la inyeccion de formulas', () => {
+    expect(csvCell('=SUM(A1:A9)')).toBe("'=SUM(A1:A9)");
+    expect(csvCell('@SUM(A1)')).toBe("'@SUM(A1)");
+    expect(csvCell('-2+3+cmd')).toBe("'-2+3+cmd");
+    expect(csvCell('+1+1')).toBe("'+1+1");
+  });
+
+  it('no altera numeros ni valores vacios', () => {
+    expect(csvCell(-1500)).toBe('-1500');
+    expect(csvCell('-1500')).toBe('-1500');
+    expect(csvCell(null)).toBe('');
+    expect(csvCell(undefined)).toBe('');
   });
 });

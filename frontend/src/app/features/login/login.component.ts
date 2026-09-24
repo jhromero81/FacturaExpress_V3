@@ -5,7 +5,7 @@
  * (modo oscuro / alto contraste) y efectos visuales decorativos.
  */
 
-import { Component, inject, ChangeDetectorRef } from '@angular/core';
+import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { AuthService } from '../../core/auth.service';
@@ -21,26 +21,34 @@ import { mensajeError } from '../../core/api.service';
 export class LoginComponent {
 
   /** Vista activa para el refresco manual tras respuestas HTTP. */
-  readonly cdr = inject(ChangeDetectorRef);
   readonly auth = inject(AuthService);
   private router = inject(Router);
 
+  /** Campos del formulario (se actualizan con ngModel, nunca en asincrono). */
   nit = '';
   password = '';
   mostrarPassword = false;
-  error = '';
-  isLoading = false;
+
+  /**
+   * Mensaje de error como senal: se fija desde el callback HTTP del login y
+   * una propiedad plana no haria que Angular recompusiera la vista, de modo
+   * que el fallo de acceso se quedaba sin mensaje visible.
+   */
+  readonly error = signal('');
+
+  /** Envio de credenciales en curso. */
+  readonly isLoading = signal(false);
 
   /** Envia las credenciales a la API y redirige al dashboard. */
   ingresar(): void {
-    this.error = '';
+    this.error.set('');
 
     if (!this.nit.trim() || !this.password.trim()) {
-      this.error = 'Por favor complete todos los campos.';
+      this.error.set('Por favor complete todos los campos.');
       return;
     }
 
-    this.isLoading = true;
+    this.isLoading.set(true);
     this.auth
       .login(this.nit.trim(), this.password)
       .subscribe({
@@ -49,8 +57,8 @@ export class LoginComponent {
           this.router.navigate(['/dashboard']);
         },
         error: (err) => {
-          this.error = mensajeError(err) || 'Credenciales incorrectas.';
-          this.isLoading = false;
+          this.error.set(mensajeError(err) || 'Credenciales incorrectas.');
+          this.isLoading.set(false);
         },
       });
   }

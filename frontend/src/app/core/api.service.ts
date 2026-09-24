@@ -72,8 +72,13 @@ export class ApiService {
       const enlace = document.createElement('a');
       enlace.href = url;
       enlace.download = nombre;
+      enlace.rel = 'noopener';
+      document.body.appendChild(enlace);
       enlace.click();
-      URL.revokeObjectURL(url);
+      enlace.remove();
+      // Revocar de inmediato puede abortar la descarga en algunos
+      // navegadores (Firefox/Safari) porque la leen de forma asincrona.
+      setTimeout(() => URL.revokeObjectURL(url), 0);
     });
   }
 }

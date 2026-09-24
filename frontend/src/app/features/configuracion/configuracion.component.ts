@@ -5,7 +5,7 @@
  * seguridad y accesibilidad (toggles + tamano de texto).
  */
 
-import { Component, inject, signal, ChangeDetectorRef } from '@angular/core';
+import { Component, inject, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -46,7 +46,6 @@ const CLAVE_CONFIG = 'fx_config';
 export class ConfiguracionComponent {
 
   /** Vista activa para el refresco manual tras respuestas HTTP. */
-  readonly cdr = inject(ChangeDetectorRef);
   private api = inject(ApiService);
   private router = inject(Router);
   readonly toast = inject(ToastService);

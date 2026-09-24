@@ -1,0 +1,17 @@
+$kind: http-request
+url: "{{baseUrl}}/clientes/{{clienteId}}"
+method: GET
+headers:
+  Authorization: Bearer {{token}}
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Cliente persistido recuperado (HTTP 200)', function () {
+          pm.response.to.have.status(200);
+      });
+      pm.test('El id consultado coincide con el creado', function () {
+          const json = pm.response.json();
+          pm.expect(json.cliente.id).to.eql(Number(pm.collectionVariables.get('clienteId')));
+      });
+    language: text/javascript
+order: 3000

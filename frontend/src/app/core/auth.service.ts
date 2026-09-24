@@ -8,6 +8,7 @@
  * se persisten en localStorage.
  */
 
+import { HttpErrorResponse } from '@angular/common/http';
 import { Injectable, computed, effect, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { ApiService } from './api.service';
@@ -140,7 +141,17 @@ export class AuthService {
     if (!this.usuario()) return;
     this.api.get<{ success: boolean; usuario: Usuario }>('/auth/me').subscribe({
       next: (res) => this.usuario.set(res.usuario),
-      error: () => this.limpiarSesion(),
+      error: (error: unknown) => {
+        // Solo se cierra la sesion cuando el servidor la rechaza (401/403).
+        // Un fallo de red o un error 5xx no debe expulsar al usuario, que
+        // antes perdia la sesion por un corte momentaneo de conexion.
+        if (
+          error instanceof HttpErrorResponse &&
+          (error.status === 401 || error.status === 403)
+        ) {
+          this.limpiarSesion();
+        }
+      },
     });
   }
 

@@ -1,0 +1,31 @@
+$kind: http-request
+url: "{{baseUrl}}/auth/login"
+method: POST
+headers:
+  Content-Type: application/json
+  X-Token-Response: 'true'
+body:
+  type: text
+  content: |-
+    {
+      "nit": "900.123.456-7",
+      "password": "{{adminPassword}}"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Login exitoso (HTTP 200)', function () {
+          pm.response.to.have.status(200);
+      });
+
+      const json = pm.response.json();
+      pm.test('Devuelve token JWT y usuario admin', function () {
+          pm.expect(json.token).to.be.a('string').and.to.not.be.empty;
+          pm.expect(json.usuario.rol).to.eql('admin');
+          pm.expect(json.usuario.nit).to.eql('900.123.456-7');
+      });
+
+      pm.collectionVariables.set('token', json.token);
+      pm.collectionVariables.set('ts', String(Date.now()));
+    language: text/javascript
+order: 1000

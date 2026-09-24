@@ -5,10 +5,11 @@
  * transacciones y productos mas vendidos.
  */
 
-import { Component, ElementRef, inject, signal, ViewChild, ChangeDetectorRef } from '@angular/core';
+import { Component, ElementRef, inject, signal, ViewChild } from '@angular/core';
 import { ApiService } from '../../core/api.service';
 import { KPIs } from '../../core/models';
 import {
+  calculateVariation,
   formatDate,
   formatMoney,
   formatShortMoney,
@@ -21,6 +22,16 @@ interface DiaSemana {
   fecha: string;
   value: number;
   facturas: number;
+}
+
+/** Tarjeta de indicador: `variacion` es null cuando no hay base de comparacion. */
+interface TarjetaKpi {
+  key: string;
+  label: string;
+  value: string | number;
+  icon: string;
+  variacion: number | null;
+  baseComparacion?: string;
 }
 
 interface Transaccion {
@@ -56,8 +67,6 @@ function shortDay(fechaStr: string): string {
 })
 export class DashboardComponent {
 
-  /** Vista activa para el refresco manual tras respuestas HTTP. */
-  readonly cdr = inject(ChangeDetectorRef);
   private api = inject(ApiService);
 
   /** Referencia al contenedor del grafico para posicionar el tooltip. */
@@ -69,19 +78,29 @@ export class DashboardComponent {
   transacciones = signal<Transaccion[]>([]);
   topProducts = signal<ProductoTop[]>([]);
 
+  /** Lineas de referencia horizontales del grafico (constantes). */
+  readonly lineasReferencia = [0, 1, 2, 3, 4];
+
+  /**
+   * Peticiones aun en curso. Antes cada respuesta apagaba el indicador de
+   * carga, de modo que desaparecia con la primera en llegar y el panel
+   * mostraba datos incompletos.
+   */
+  private peticionesPendientes = 0;
+
   /** Tooltip del grafico (posicion + datos del dia). */
   tooltip = signal<{ x: number; y: number; dia: DiaSemana } | null>(null);
 
   /** Dia seleccionado al hacer clic en una barra. */
   detailBar = signal<DiaSemana | null>(null);
 
-constructor() {
+  constructor() {
+    this.peticionesPendientes = 4;
+
     this.api.get<{ success: boolean; kpis: KPIs }>('/reportes/kpis').subscribe({
-      next: (res) => {
-        this.kpis.set(res.kpis ?? null);
-        this.loading.set(false);
-      },
-      error: () => this.loading.set(false),
+      next: (res) => this.kpis.set(res.kpis ?? null),
+      complete: () => this.finalizarPeticion(),
+      error: () => this.finalizarPeticion(),
     });
 
     this.api
@@ -89,11 +108,9 @@ constructor() {
         '/reportes/ventas-semanales'
       )
       .subscribe({
-        next: (res) => {
-          this.ventasSemanales.set(res.ventas ?? []);
-          this.loading.set(false);
-        },
-        error: () => this.loading.set(false),
+        next: (res) => this.ventasSemanales.set(res.ventas ?? []),
+        complete: () => this.finalizarPeticion(),
+        error: () => this.finalizarPeticion(),
       });
 
     this.api
@@ -101,46 +118,40 @@ constructor() {
         '/reportes/ultimas-transacciones?limite=4'
       )
       .subscribe({
-        next: (res) => {
-          this.transacciones.set(res.transacciones ?? []);
-          this.loading.set(false);
-        },
-        error: () => this.loading.set(false),
+        next: (res) => this.transacciones.set(res.transacciones ?? []),
+        complete: () => this.finalizarPeticion(),
+        error: () => this.finalizarPeticion(),
       });
 
     this.api
       .get<{ success: boolean; productos: ProductoTop[] }>('/reportes/productos-top?limite=4')
       .subscribe({
-        next: (res) => {
-          this.topProducts.set(res.productos ?? []);
-          this.loading.set(false);
-        },
-        error: () => this.loading.set(false),
+        next: (res) => this.topProducts.set(res.productos ?? []),
+        complete: () => this.finalizarPeticion(),
+        error: () => this.finalizarPeticion(),
       });
   }
 
-  /** Datos del grafico: siempre los ultimos 7 dias en orden. */
+  /** Marca una peticion como terminada y apaga la carga con la ultima. */
+  private finalizarPeticion(): void {
+    this.peticionesPendientes = Math.max(this.peticionesPendientes - 1, 0);
+    if (this.peticionesPendientes === 0) this.loading.set(false);
+  }
+
+  /**
+   * Datos del grafico. El servidor devuelve siempre los ultimos 7 dias
+   * (con ceros incluidos) calculados con su propio reloj, por lo que la
+   * serie se usa tal cual: antes el navegador reconstruia las etiquetas
+   * con su fecha local y podian no coincidir con las del servidor.
+   */
   get chartData(): DiaSemana[] {
-    const byDate = new Map(this.ventasSemanales().map((v) => [v.dia, v]));
-    const dias: DiaSemana[] = [];
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      const iso = [
-        d.getFullYear(),
-        String(d.getMonth() + 1).padStart(2, '0'),
-        String(d.getDate()).padStart(2, '0'),
-      ].join('-');
-      const row = byDate.get(iso);
-      dias.push({
-        key: iso,
-        day: shortDay(iso),
-        fecha: iso,
-        value: Number(row?.total) || 0,
-        facturas: Number(row?.facturas) || 0,
-      });
-    }
-    return dias;
+    return this.ventasSemanales().map((v) => ({
+      key: v.dia,
+      day: shortDay(v.dia),
+      fecha: v.dia,
+      value: Number(v.total) || 0,
+      facturas: Number(v.facturas) || 0,
+    }));
   }
 
   /** Total de ventas de la semana. */
@@ -194,37 +205,50 @@ constructor() {
   /** Referencia a Math para uso en la plantilla. */
   readonly Math = Math;
 
-  /** Tarjetas KPI calculadas a partir de los indicadores de la API. */
-  get kpiCards() {
+  /**
+   * Tarjetas KPI calculadas a partir de los indicadores de la API. La
+   * variacion se calcula contra el dia anterior y solo se muestra cuando
+   * existe una base de comparacion real: antes todas las tarjetas
+   * mostraban un "+0%" fijo que aparentaba una tendencia inexistente.
+   */
+  get kpiCards(): TarjetaKpi[] {
     const k = this.kpis();
+    const ventasDia = Number(k?.ventasDia ?? 0);
+    const ventasAyer = k?.ventasAyer;
+    const variacionVentas =
+      ventasAyer === undefined || Number(ventasAyer) <= 0
+        ? null
+        : calculateVariation(ventasDia, Number(ventasAyer));
+
     return [
       {
         key: 'ventas',
         label: 'Ventas del Dia',
-        value: formatMoney(k?.ventasDia ?? 0),
+        value: formatMoney(ventasDia),
         icon: 'attach_money',
-        variacion: 0,
+        variacion: variacionVentas,
+        baseComparacion: 'vs. ayer',
       },
       {
         key: 'facturas',
         label: 'Facturas Emitidas',
         value: k?.facturasEmitidasHoy ?? 0,
         icon: 'receipt_long',
-        variacion: 0,
+        variacion: null,
       },
       {
         key: 'pendientes',
         label: 'Pendientes DIAN',
         value: k?.pendientesDIAN ?? 0,
         icon: 'pending_actions',
-        variacion: 0,
+        variacion: null,
       },
       {
         key: 'ticket',
         label: 'Ticket Promedio',
         value: formatMoney(k?.ticketPromedio ?? 0),
         icon: 'speed',
-        variacion: 0,
+        variacion: null,
       },
     ];
   }

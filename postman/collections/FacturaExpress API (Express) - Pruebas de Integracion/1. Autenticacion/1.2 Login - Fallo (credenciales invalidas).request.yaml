@@ -1,0 +1,23 @@
+$kind: http-request
+url: "{{baseUrl}}/auth/login"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "nit": "usuario_invalido",
+      "password": "clave_incorrecta"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Login con credenciales invalidas (HTTP 401)', function () {
+          pm.response.to.have.status(401);
+      });
+      pm.test('Respuesta con success=false', function () {
+          pm.expect(pm.response.json().success).to.be.false;
+      });
+    language: text/javascript
+order: 2000

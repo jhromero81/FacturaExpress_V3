@@ -19,7 +19,9 @@ const {
   isValidPositiveInt,
   isRequiredString,
   clampInt,
+  asString,
   escapeXML,
+  escapeHTML,
   escapeCSV,
   mapFacturaRow,
   mapItemRow,
@@ -36,7 +38,7 @@ const ESTADOS_VALIDOS = ['pendiente', 'enviada', 'rechazada'];
 /** Estados de firma de la factura */
 const FIRMA_ESTADOS = ['pendiente', 'firmada', 'rechazada'];
 
-/** Tarifa de IVA usada por el sistema */
+/** Tarifa de IVA general, usada solo si el producto no define una */
 const IVA_TARIFA = 0.19;
 
 /** Columnas base de una factura (para los SELECT repetidos) */
@@ -52,7 +54,11 @@ const CAMPOS_FACTURA = `f.id, f.numero, f.fecha, f.cliente_id, f.cliente_identif
  *  - pagina / limite: paginacion de resultados.
  */
 const listFacturas = asyncHandler(async (req, res) => {
-  const { q = '', estado = '', pagina = 1, limite = 20 } = req.query;
+  // asString evita el 500 cuando el cliente repite la clave (?q=a&q=b),
+  // caso en el que Express entrega un arreglo y q.trim() no existe.
+  const q = asString(req.query.q);
+  const estado = asString(req.query.estado);
+  const { pagina = 1, limite = 20 } = req.query;
   // Paginacion acotada: valores no numericos caen a los default y nunca
   // se permite un desplazamiento/limite invalido (evita errores 500).
   const paginaEntera = clampInt(pagina, 1, 100000, 1);
@@ -195,6 +201,13 @@ const createFactura = asyncHandler(async (req, res) => {
   const productoPorId = new Map(productos.map((p) => [p.id, p]));
 
   // ---- Calcular lineas de factura ----
+  // Cada producto puede tributar una tarifa distinta (0%, 5% o 19%): la
+  // tarifa se toma del catalogo y no de una constante. El IVA de la linea
+  // se calcula sobre la base YA descontada, de modo que la suma del IVA de
+  // las lineas coincida exactamente con el IVA de la cabecera (antes el
+  // detalle quedaba descuadrado respecto al total cuando habia descuento).
+  const factorDescuento = 1 - descuentoValido / 100;
+
   const lineas = items.map((item) => {
     const producto = productoPorId.get(Number(item.productoId));
     const cantidad = Number(item.cantidad);
@@ -209,15 +222,20 @@ const createFactura = asyncHandler(async (req, res) => {
       );
     }
 
-    const subtotal = producto.precio * cantidad;
+    const precioUnitario = Number(producto.precio);
+    const subtotal = Math.round(precioUnitario * cantidad);
+    const tarifaIva = Number.isFinite(Number(producto.iva)) ? Number(producto.iva) : IVA_TARIFA;
+    const baseDescontada = Math.round(subtotal * factorDescuento);
+
     return {
       productoId: producto.id,
       codigo: producto.codigo,
       nombre: producto.nombre,
       cantidad,
-      precioUnitario: Number(producto.precio),
-      iva: calcularIVA(subtotal),
-      subtotal: Math.round(subtotal),
+      precioUnitario,
+      tarifaIva,
+      subtotal,
+      iva: calcularIVA(baseDescontada, tarifaIva),
     };
   });
 
@@ -225,7 +243,9 @@ const createFactura = asyncHandler(async (req, res) => {
   const subtotalTotal = lineas.reduce((sum, l) => sum + l.subtotal, 0);
   const montoDescuento = Math.round(subtotalTotal * (descuentoValido / 100));
   const baseGravable = subtotalTotal - montoDescuento;
-  const ivaTotal = Math.round(baseGravable * IVA_TARIFA);
+  // El IVA de la cabecera es la suma del IVA de las lineas: asi el detalle
+  // siempre reconcilia con los totales, requisito de la factura electronica.
+  const ivaTotal = lineas.reduce((sum, l) => sum + l.iva, 0);
   const total = baseGravable + ivaTotal;
 
   // ---- Transaccion: factura + items + descuento de stock ----
@@ -379,12 +399,15 @@ async function procesarPostVenta({ factura, cliente, numero, facturaId, req }) {
 
   // Enviar por correo si esta configurado y el cliente tiene email
   if (pdfBytes && cliente.email && emailService.correoConfigurado()) {
+    // El nombre del cliente se escapa: es un dato que el propio usuario
+    // registra y se interpola en HTML.
+    const nombreSeguro = escapeHTML(factura.cliente.nombre);
     const enviado = await emailService
       .enviarFactura({
         destino: cliente.email,
         asunto: `Factura Electronica ${factura.numero}`,
-        cuerpoHtml: `<p>Hola <strong>${factura.cliente.nombre}</strong>,</p>
-          <p>Adjuntamos su factura electronica <strong>${factura.numero}</strong> por un valor de
+        cuerpoHtml: `<p>Hola <strong>${nombreSeguro}</strong>,</p>
+          <p>Adjuntamos su factura electronica <strong>${escapeHTML(factura.numero)}</strong> por un valor de
           <strong>$${Number(factura.total).toLocaleString('es-CO')}</strong>.</p>
           <p>Gracias por su compra.</p>`,
         pdfBytes,
@@ -414,8 +437,13 @@ const updateEstadoFactura = asyncHandler(async (req, res) => {
     throw createHttpError(400, `Estado invalido. Valores permitidos: ${ESTADOS_VALIDOS.join(', ')}.`);
   }
 
+  // Se leen TODAS las columnas que la actualizacion necesita. Antes solo
+  // se traian id, numero y estado, de modo que firma_estado e intentos_dian
+  // llegaban como undefined: el UPDATE enviaba NULL a intentos_dian, que es
+  // NOT NULL, y MySQL abortaba con error 1048 (HTTP 500) para los estados
+  // 'pendiente' y 'rechazada'.
   const [actual] = await pool.query(
-    'SELECT id, numero, estado FROM facturas WHERE id = ?',
+    'SELECT id, numero, estado, firma_estado, intentos_dian FROM facturas WHERE id = ?',
     [req.params.id]
   );
   if (actual.length === 0) {
@@ -423,12 +451,15 @@ const updateEstadoFactura = asyncHandler(async (req, res) => {
   }
 
   const factura = actual[0];
-  let firmaEstado = factura.firma_estado;
-  let intentosDian = factura.intentos_dian;
+  let firmaEstado = FIRMA_ESTADOS.includes(factura.firma_estado)
+    ? factura.firma_estado
+    : 'pendiente';
+  let intentosDian = Number(factura.intentos_dian) || 0;
 
-  // Simulacion del flujo DIAN: cada cambio suma un intento y ajusta la firma
+  // Simulacion del flujo DIAN: cada envio suma un intento (acumulativo,
+  // antes se sobrescribia con 1) y ajusta el estado de la firma.
   if (estado === 'enviada') {
-    intentosDian = Number(intentosDian || 0) + 1;
+    intentosDian += 1;
     firmaEstado = 'firmada';
   } else if (estado === 'rechazada') {
     firmaEstado = 'rechazada';
@@ -605,7 +636,7 @@ const getFacturaXML = asyncHandler(async (req, res) => {
     <Descuento>${Number(factura.descuento)}</Descuento>
     <Total>${Number(factura.total)}</Total>
     <Estado>${escapeXML(factura.estado)}</Estado>
-    <CUNE>${escapeXML(factura.cufe)}</CUNE>
+    <CUFE>${escapeXML(factura.cufe)}</CUFE>
   </Cabecera>
   <Detalles>
 ${detalle}

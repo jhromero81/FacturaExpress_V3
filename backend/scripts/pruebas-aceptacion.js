@@ -17,7 +17,11 @@
  * Variables de entorno:
  *   E2E_BASE_URL  URL de la API (por defecto http://127.0.0.1:4000)
  *   E2E_NIT       NIT del administrador (por defecto 900.123.456-7 del seed)
- *   E2E_PASSWORD  Contrasena del administrador (por defecto admin123 del seed)
+ *   E2E_PASSWORD  Contrasena del administrador. Si no se define, se usa
+ *                 SEED_ADMIN_PASSWORD del backend/.env (la misma que
+ *                 definio el seed al poblar la base).
+ *   E2E_VENDEDOR_NIT / E2E_VENDEDOR_PASSWORD  Credenciales del vendedor;
+ *                 E2E_VENDEDOR_PASSWORD tambien cae a SEED_VENDEDOR_PASSWORD.
  *
  * El script no depende de librerias externas (usa fetch nativo de Node 18+)
  * y devuelve codigo de salida 1 si algun caso de aceptacion falla, de modo
@@ -26,11 +30,30 @@
 
 'use strict';
 
+const path = require('path');
+const dotenv = require('dotenv');
+
+// Carga el .env del backend para reutilizar las contrasenas del seed
+// (SEED_ADMIN_PASSWORD / SEED_VENDEDOR_PASSWORD) cuando no se pasan
+// E2E_PASSWORD / E2E_VENDEDOR_PASSWORD de forma explicita.
+dotenv.config({ path: path.join(__dirname, '..', '.env') });
+
 const BASE_URL = (process.env.E2E_BASE_URL || 'http://127.0.0.1:4000').replace(/\/+$/, '');
 const ADMIN_NIT = process.env.E2E_NIT || '900.123.456-7';
-const ADMIN_PASSWORD = process.env.E2E_PASSWORD || 'admin123';
+const ADMIN_PASSWORD = process.env.E2E_PASSWORD || process.env.SEED_ADMIN_PASSWORD;
 const VENDEDOR_NIT = process.env.E2E_VENDEDOR_NIT || '80.987.654-3';
-const VENDEDOR_PASSWORD = process.env.E2E_VENDEDOR_PASSWORD || 'vendedor123';
+const VENDEDOR_PASSWORD = process.env.E2E_VENDEDOR_PASSWORD || process.env.SEED_VENDEDOR_PASSWORD;
+
+if (!ADMIN_PASSWORD || !VENDEDOR_PASSWORD) {
+  console.error(
+    '[e2e] Faltan E2E_PASSWORD y/o E2E_VENDEDOR_PASSWORD. Defina las\n' +
+      '      contrasenas del seed en backend/.env (SEED_ADMIN_PASSWORD y\n' +
+      '      SEED_VENDEDOR_PASSWORD) y vuelva a sembrar la base, o pase las\n' +
+      '      contrasenas directamente:\n' +
+      '        E2E_PASSWORD=... E2E_VENDEDOR_PASSWORD=... npm run test:e2e'
+  );
+  process.exit(1);
+}
 
 /** Tarifa de IVA vigente en Colombia */
 const IVA_RATE = 0.19;
@@ -147,7 +170,7 @@ async function main() {
   });
 
   if (!tokenAdmin) {
-    omitido('CA-03 a CA-15 Flujo de facturacion', 'sin sesion valida no es posible continuar');
+    omitido('CA-03 a CA-21 Flujo de facturacion', 'sin sesion valida no es posible continuar');
     return resumir();
   }
 
@@ -336,15 +359,138 @@ async function main() {
     ok('CA-15 El rol vendedor no accede a los modulos administrativos (403)', r.json.message);
   });
 
-  // ---- 7. Cierre de sesion y revocacion del token ----
-  await caso('CA-16 El logout revoca el token (401 en la siguiente peticion)', async () => {
+  // ---- 7. Regresion: ciclo completo de estados y numeracion ----
+  await caso('CA-16 El estado "rechazada" y el regreso a "pendiente" funcionan', async () => {
+    // Regresion: la actualizacion de estado no traia firma_estado ni
+    // intentos_dian, de modo que MySQL recibia NULL en una columna NOT NULL
+    // y estos dos cambios respondian 500.
+    exigir(factura, 'no se emitio la factura');
+
+    const rechazo = await http(`/api/facturas/${factura.id}/estado`, {
+      method: 'PUT',
+      body: { estado: 'rechazada' },
+    });
+    exigir(rechazo.status === 200, `rechazada respondio HTTP ${rechazo.status}: ${rechazo.json && rechazo.json.message}`);
+    exigir(rechazo.json.factura.estado === 'rechazada', `estado ${rechazo.json.factura.estado}`);
+    exigir(rechazo.json.factura.firmaEstado === 'rechazada', `firma ${rechazo.json.factura.firmaEstado}`);
+
+    const pendiente = await http(`/api/facturas/${factura.id}/estado`, {
+      method: 'PUT',
+      body: { estado: 'pendiente' },
+    });
+    exigir(pendiente.status === 200, `pendiente respondio HTTP ${pendiente.status}: ${pendiente.json && pendiente.json.message}`);
+    exigir(pendiente.json.factura.estado === 'pendiente', `estado ${pendiente.json.factura.estado}`);
+
+    ok('CA-16 El estado "rechazada" y el regreso a "pendiente" funcionan', 'rechazada -> pendiente sin errores');
+  });
+
+  await caso('CA-17 Los intentos de envio a la DIAN se acumulan', async () => {
+    // Regresion: cada envio sobrescribia el contador con 1.
+    const antes = await http(`/api/facturas/${factura.id}/estado`, {
+      method: 'PUT',
+      body: { estado: 'enviada' },
+    });
+    exigir(antes.status === 200, `HTTP ${antes.status}`);
+    const primero = Number(antes.json.factura.intentosDian);
+
+    const despues = await http(`/api/facturas/${factura.id}/estado`, {
+      method: 'PUT',
+      body: { estado: 'enviada' },
+    });
+    exigir(despues.status === 200, `HTTP ${despues.status}`);
+    const segundo = Number(despues.json.factura.intentosDian);
+
+    exigir(segundo === primero + 1, `los intentos no se acumulan (${primero} -> ${segundo})`);
+    ok('CA-17 Los intentos de envio a la DIAN se acumulan', `intentos=${segundo}`);
+  });
+
+  await caso('CA-18 Eliminar una factura no rompe la numeracion consecutiva', async () => {
+    // Regresion: el consecutivo se deducia con COUNT(*)+1, de modo que al
+    // eliminar una factura intermedia la siguiente venta intentaba reutilizar
+    // un numero existente y respondia 500 (clave duplicada).
+    const primera = await http('/api/facturas', {
+      method: 'POST',
+      body: { clienteId, items: [{ productoId, cantidad: 1 }], descuento: 0 },
+    });
+    exigir(primera.status === 201, `no se pudo emitir la factura previa (HTTP ${primera.status})`);
+
+    const baja = await http(`/api/facturas/${primera.json.factura.id}`, { method: 'DELETE' });
+    exigir(baja.status === 200, `no se pudo eliminar la factura pendiente (HTTP ${baja.status})`);
+
+    const segunda = await http('/api/facturas', {
+      method: 'POST',
+      body: { clienteId, items: [{ productoId, cantidad: 1 }], descuento: 0 },
+    });
+    exigir(
+      segunda.status === 201,
+      `la venta posterior a la eliminacion fallo (HTTP ${segunda.status}): ${segunda.json && segunda.json.message}`
+    );
+    exigir(
+      segunda.json.factura.numero !== primera.json.factura.numero,
+      'la numeracion reutilizo el numero de la factura eliminada'
+    );
+
+    ok(
+      'CA-18 Eliminar una factura no rompe la numeracion consecutiva',
+      `${primera.json.factura.numero} eliminada -> siguiente ${segunda.json.factura.numero}`
+    );
+  });
+
+  await caso('CA-19 El IVA se calcula con la tarifa configurada del producto', async () => {
+    // Regresion: se aplicaba siempre el 19% aunque el producto tributara otra
+    // tarifa (0% o 5%).
+    const conIva5 = await http('/api/productos', {
+      method: 'POST',
+      body: { codigo: `IVA5-${Date.now()}`, nombre: 'Producto gravamen 5%', precio: 100000, iva: 0.05, stock: 5 },
+    });
+    exigir(conIva5.status === 201, `no se pudo crear el producto al 5% (HTTP ${conIva5.status})`);
+
+    const venta = await http('/api/facturas', {
+      method: 'POST',
+      body: { clienteId, items: [{ productoId: conIva5.json.producto.id, cantidad: 1 }], descuento: 0 },
+    });
+    exigir(venta.status === 201, `no se pudo emitir la venta (HTTP ${venta.status})`);
+    exigir(Number(venta.json.factura.iva) === 5000, `el IVA deberia ser 5.000 y fue ${venta.json.factura.iva}`);
+    exigir(
+      Number(venta.json.factura.total) === 105000,
+      `el total deberia ser 105.000 y fue ${venta.json.factura.total}`
+    );
+
+    ok('CA-19 El IVA se calcula con la tarifa configurada del producto', 'base 100.000 al 5% -> IVA 5.000');
+  });
+
+  await caso('CA-20 El detalle de la factura cuadra con la cabecera', async () => {
+    // Regresion: con descuento, la suma del IVA de las lineas no coincidia
+    // con el IVA de la cabecera.
+    const venta = await http('/api/facturas', {
+      method: 'POST',
+      body: { clienteId, items: [{ productoId, cantidad: 2 }], descuento: 10 },
+    });
+    exigir(venta.status === 201, `HTTP ${venta.status}`);
+
+    const f = venta.json.factura;
+    const sumaSubtotales = f.items.reduce((s, i) => s + Number(i.subtotal), 0);
+    const sumaIvas = f.items.reduce((s, i) => s + Number(i.iva), 0);
+
+    exigir(sumaSubtotales === Number(f.subtotal), 'la suma de subtotales no cuadra con la cabecera');
+    exigir(sumaIvas === Number(f.iva), `la suma de IVA (${sumaIvas}) no cuadra con la cabecera (${f.iva})`);
+    exigir(
+      Number(f.subtotal) - Number(f.descuento) + Number(f.iva) === Number(f.total),
+      'la identidad contable subtotal - descuento + IVA = total no se cumple'
+    );
+
+    ok('CA-20 El detalle de la factura cuadra con la cabecera', `subtotal ${moneda(f.subtotal)}, IVA ${moneda(f.iva)}, total ${moneda(f.total)}`);
+  });
+
+  // ---- 8. Cierre de sesion y revocacion del token ----
+  await caso('CA-21 El logout revoca el token (401 en la siguiente peticion)', async () => {
     const cierre = await http('/api/auth/logout', { method: 'POST' });
     exigir(cierre.status === 200, `HTTP ${cierre.status}`);
 
     const posterior = await http('/api/facturas');
     exigir(posterior.status === 401, `se esperaba 401 tras el logout y se recibio ${posterior.status}`);
     tokenAdmin = null;
-    ok('CA-16 El logout revoca el token (401 en la siguiente peticion)', 'sesion invalidada correctamente');
+    ok('CA-21 El logout revoca el token (401 en la siguiente peticion)', 'sesion invalidada correctamente');
   });
 
   return resumir();

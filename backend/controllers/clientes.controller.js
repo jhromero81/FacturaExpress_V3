@@ -8,7 +8,8 @@
 
 const { pool } = require('../config/db');
 const { asyncHandler, createHttpError } = require('../middleware/errorHandler');
-const { isRequiredString, mapClienteRow, clampInt } = require('../utils/helpers');
+const { isRequiredString, mapClienteRow, clampInt, asString } = require('../utils/helpers');
+const { registrarAuditoria } = require('../utils/auditoria');
 
 /**
  * GET /api/clientes
@@ -18,7 +19,8 @@ const { isRequiredString, mapClienteRow, clampInt } = require('../utils/helpers'
  *  - pagina / limite: paginacion de resultados.
  */
 const listClientes = asyncHandler(async (req, res) => {
-  const { q = '', pagina = 1, limite = 50 } = req.query;
+  const q = asString(req.query.q);
+  const { pagina = 1, limite = 50 } = req.query;
   const termino = `%${q.trim()}%`;
   // Paginacion acotada: nunca crece sin limite y los valores no numericos
   // caen al valor por defecto (evita LIMIT/OFFSET invalido => error 500).
@@ -86,25 +88,47 @@ const createCliente = asyncHandler(async (req, res) => {
     throw createHttpError(400, 'El nombre es obligatorio.');
   }
 
-  // Evitar duplicados por identificacion
+  // Evitar duplicados por identificacion. Si el cliente existe pero fue
+  // dado de baja (borrado logico), se reactiva con los datos nuevos: la
+  // identificacion es UNIQUE y de otro modo ese NIT quedaba bloqueado
+  // para siempre.
   const [existentes] = await pool.query(
-    'SELECT id FROM clientes WHERE identificacion = ?',
+    'SELECT id, activo FROM clientes WHERE identificacion = ?',
     [identificacion.trim()]
   );
-  if (existentes.length > 0) {
+  if (existentes.length > 0 && existentes[0].activo) {
     throw createHttpError(409, 'Ya existe un cliente con esa identificacion.');
   }
 
-  const [result] = await pool.query(
-    `INSERT INTO clientes (identificacion, nombre, email, telefono)
-     VALUES (?, ?, ?, ?)`,
-    [identificacion.trim(), nombre.trim(), email?.trim() || null, telefono?.trim() || null]
-  );
+  let clienteId;
+  if (existentes.length > 0) {
+    clienteId = existentes[0].id;
+    await pool.query(
+      `UPDATE clientes
+          SET nombre = ?, email = ?, telefono = ?, activo = 1
+        WHERE id = ?`,
+      [nombre.trim(), email?.trim() || null, telefono?.trim() || null, clienteId]
+    );
+  } else {
+    const [result] = await pool.query(
+      `INSERT INTO clientes (identificacion, nombre, email, telefono)
+       VALUES (?, ?, ?, ?)`,
+      [identificacion.trim(), nombre.trim(), email?.trim() || null, telefono?.trim() || null]
+    );
+    clienteId = result.insertId;
+  }
 
-  // Recuperar el cliente recien creado para responderlo completo
+  // Recuperar el cliente creado/reactivado para responderlo completo
   const [rows] = await pool.query(
     'SELECT id, identificacion, nombre, email, telefono FROM clientes WHERE id = ?',
-    [result.insertId]
+    [clienteId]
+  );
+
+  await registrarAuditoria(
+    req,
+    `${existentes.length > 0 ? 'REACTIVAR' : 'INSERT'} cliente id=${clienteId}`,
+    'clientes',
+    clienteId
   );
 
   res.status(201).json({
@@ -164,6 +188,8 @@ const updateCliente = asyncHandler(async (req, res) => {
     [req.params.id]
   );
 
+  await registrarAuditoria(req, `UPDATE cliente id=${req.params.id}`, 'clientes', req.params.id);
+
   res.json({
     success: true,
     message: 'Cliente actualizado correctamente.',
@@ -185,6 +211,8 @@ const deleteCliente = asyncHandler(async (req, res) => {
   if (result.affectedRows === 0) {
     throw createHttpError(404, 'Cliente no encontrado.');
   }
+
+  await registrarAuditoria(req, `DELETE cliente id=${req.params.id}`, 'clientes', req.params.id);
 
   res.json({ success: true, message: 'Cliente eliminado correctamente.' });
 });

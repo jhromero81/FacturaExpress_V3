@@ -1,0 +1,17 @@
+$kind: http-request
+url: "{{baseUrl}}/facturas/{{facturaId}}/csv"
+method: GET
+headers:
+  Authorization: Bearer {{token}}
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('CSV generado (HTTP 200)', function () {
+          pm.response.to.have.status(200);
+      });
+      pm.test('El CSV contiene la cabecera de items', function () {
+          const csv = pm.response.text();
+          pm.expect(csv).to.include('Numero Factura');
+      });
+    language: text/javascript
+order: 7000

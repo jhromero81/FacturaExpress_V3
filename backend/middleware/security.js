@@ -10,15 +10,35 @@
  */
 
 const rateLimit = require('express-rate-limit');
+const { verifyToken } = require('../config/jwt');
 
 /**
- * Indica si la peticion trae un token de sesion (autenticada).
+ * Indica si la peticion trae un token de sesion VALIDO.
+ *
+ * Antes bastaba con que existiera un encabezado "Authorization: Bearer x"
+ * para saltar el limite anonimo, de modo que cualquiera podia pasar del
+ * cupo de 120/min al de 600/min con un token inventado. Ahora se verifica
+ * la firma del JWT (sin tocar la base de datos) para elegir el cupo.
+ *
  * @param {object} req - Objeto de peticion de Express.
  * @returns {boolean}
  */
 function tieneToken(req) {
   const authHeader = req.headers.authorization || '';
-  return authHeader.startsWith('Bearer ') || Boolean(req.cookies?.token);
+  const token = authHeader.startsWith('Bearer ')
+    ? authHeader.slice(7)
+    : req.cookies?.token;
+
+  if (!token) return false;
+
+  try {
+    verifyToken(token);
+    return true;
+  } catch {
+    // Token ausente, manipulado, vencido o firmado con otra clave:
+    // se trata como peticion anonima.
+    return false;
+  }
 }
 
 /**

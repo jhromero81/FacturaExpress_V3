@@ -1,0 +1,34 @@
+$kind: http-request
+url: "{{baseUrl}}/facturas"
+method: POST
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{token}}
+body:
+  type: json
+  content: |-
+    {
+      "clienteId": {{clienteId}},
+      "items": [
+        { "productoId": {{productoId}}, "cantidad": 2 }
+      ],
+      "descuento": 10
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Factura creada (HTTP 201)', function () {
+          pm.response.to.have.status(201);
+      });
+      const json = pm.response.json();
+      pm.test('Calculos correctos: CUNE, descuento y total', function () {
+          pm.expect(json.factura.cufe.length).to.be.at.least(40);
+          pm.expect(json.factura.descuento).to.be.above(0);
+          pm.expect(json.factura.total).to.be.above(0);
+      });
+      pm.test('La factura queda persistida con numero', function () {
+          pm.expect(json.factura.numero).to.match(/^FAC-/);
+      });
+      pm.collectionVariables.set('facturaId', String(json.factura.id));
+    language: text/javascript
+order: 2000
