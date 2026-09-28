@@ -6,7 +6,9 @@
     "start": "ng serve",
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
-    "test": "ng test"
+    "test": "ng test",
+    "check:native": "node scripts/check-native-binaries.js",
+    "postinstall": "node scripts/check-native-binaries.js"
   },
   "private": true,
   "packageManager": "npm@11.19.0",

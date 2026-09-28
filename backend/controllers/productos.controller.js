@@ -244,7 +244,10 @@ const adjustStock = asyncHandler(async (req, res) => {
     if (existe.length === 0) {
       throw createHttpError(404, 'Producto no encontrado.');
     }
-    throw createHttpError(400, `Stock insuficiente: el producto solo tiene ${existe[0].stock} unidades.`);
+    // 409 (no 400): la peticion es valida pero entra en conflicto con el
+    // estado actual del inventario, igual que el stock insuficiente en la
+    // emision de facturas.
+    throw createHttpError(409, `Stock insuficiente: el producto solo tiene ${existe[0].stock} unidades.`);
   }
 
   const [rows] = await pool.query(

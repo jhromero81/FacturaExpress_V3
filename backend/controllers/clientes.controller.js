@@ -100,6 +100,18 @@ const createCliente = asyncHandler(async (req, res) => {
     throw createHttpError(409, 'Ya existe un cliente con esa identificacion.');
   }
 
+  // El correo tambien es UNIQUE en la base: sin esta comprobacion la
+  // insercion fallaba con un error 1062 y respondia 500.
+  if (email?.trim()) {
+    const [emailDuplicado] = await pool.query(
+      'SELECT id FROM clientes WHERE email = ?',
+      [email.trim()]
+    );
+    if (emailDuplicado.length > 0) {
+      throw createHttpError(409, 'Ya existe un cliente con ese correo.');
+    }
+  }
+
   let clienteId;
   if (existentes.length > 0) {
     clienteId = existentes[0].id;
@@ -163,6 +175,17 @@ const updateCliente = asyncHandler(async (req, res) => {
     );
     if (duplicados.length > 0) {
       throw createHttpError(409, 'Ya existe un cliente con esa identificacion.');
+    }
+  }
+
+  // El correo tambien es UNIQUE: validar duplicado si se envia uno nuevo.
+  if (email?.trim()) {
+    const [emailDuplicado] = await pool.query(
+      'SELECT id FROM clientes WHERE email = ? AND id <> ?',
+      [email.trim(), req.params.id]
+    );
+    if (emailDuplicado.length > 0) {
+      throw createHttpError(409, 'Ya existe un cliente con ese correo.');
     }
   }
 
