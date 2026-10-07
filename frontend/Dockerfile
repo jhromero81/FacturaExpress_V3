@@ -9,6 +9,13 @@ WORKDIR /app
 
 # Copiar solo las dependencias para aprovechar la cache de capas
 COPY package.json package-lock.json ./
+
+# El postinstall del proyecto (scripts/check-native-binaries.js) valida los
+# binarios nativos de esbuild/rolldown y los restaura si corresponden a otra
+# plataforma. Debe existir ANTES de `npm ci`, porque de lo contrario el
+# postinstall aborta con MODULE_NOT_FOUND y la imagen no se construye.
+COPY scripts ./scripts
+
 RUN npm ci
 
 # Copiar el codigo fuente y compilar la aplicacion

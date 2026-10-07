@@ -25,6 +25,11 @@
 const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const express = require('express');
+// Prefijo del numero de factura del mes actual (FAC-YYYYMM-). Se toma de
+// la propia aplicacion para que la expectativa no quede atada al mes en
+// que se escribio la prueba: antes estaba fijado 'FAC-202609-00004' y la
+// suite fallaba en cualquier otro mes.
+const { prefijoFacturaMes } = require('../../utils/helpers');
 
 // ============================================================
 // Traza y escenario en curso
@@ -668,7 +673,7 @@ test('la numeracion no reutiliza ni duplica numeros tras eliminar facturas (regr
   });
 
   assert.equal(venta.status, 201, `sentencias: ${traza.sqls.join(' | ')}`);
-  assert.equal(venta.body.factura.numero, 'FAC-202609-00004');
+  assert.equal(venta.body.factura.numero, `${prefijoFacturaMes()}00004`);
   assert.equal(
     traza.sqls.some((s) => s.includes('COUNT(*)') && s.includes('FROM facturas')),
     false,

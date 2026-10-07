@@ -17,6 +17,7 @@
         "build": {
           "builder": "@angular/build:application",
           "options": {
+            "outputPath": "dist/facturaexpress-frontend",
             "browser": "src/main.ts",
             "polyfills": [
               "zone.js"
@@ -29,6 +30,7 @@
               }
             ],
             "styles": [
+              "src/fonts.css",
               "src/styles.css"
             ]
           },

@@ -62,6 +62,13 @@ const CORS_ORIGINS = resolverOrigenesCors();
 function resolveTrustProxy() {
   const valor = process.env.TRUST_PROXY;
   if (valor !== undefined && valor !== '') {
+    // Booleanos documentados: 'false' desactiva la confianza en
+    // X-Forwarded-For (API expuesta directamente) y 'true' confia en todos
+    // los saltos. Sin normalizar, Express recibe la cadena 'false' e
+    // intenta interpretarla como una IP, abortando el arranque con
+    // "invalid IP address: false".
+    if (valor === 'false') return false;
+    if (valor === 'true') return true;
     return /^\d+$/.test(valor) ? Number(valor) : valor;
   }
   return process.env.NODE_ENV === 'production' ? 1 : 'loopback';
@@ -213,3 +220,4 @@ async function start() {
 start();
 
 module.exports = app;
+

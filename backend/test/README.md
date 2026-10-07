@@ -7,12 +7,12 @@ Pasos para ejecutar cada nivel de la pirámide, resultados esperados y solución
 
 ## 0. Requisitos previos
 
-| Requisito               | Detalle                                                                     |
-| ----------------------- | --------------------------------------------------------------------------- |
-| Node.js 18 o superior   | El backend usa `node --test` y `fetch` globales                             |
-| Dependencias instaladas | Desde la raíz: `npm install` y `npm run install:all`                        |
-| MySQL 8                 | **Solo** para las pruebas de aceptación (los niveles 1 y 2 no lo necesitan) |
-| Docker (opcional)       | Alternativa a MySQL local: `docker compose up -d db`                        |
+| Requisito               | Detalle                                                                       |
+| ----------------------- | ----------------------------------------------------------------------------- |
+| Node.js 22 o superior   | El backend usa `node --test` y `fetch` globales (vea `.nvmrc` y `engines`)    |
+| Dependencias instaladas | Desde la raíz: `npm run env:bootstrap`, `npm install` y `npm run install:all` |
+| MySQL 8                 | **Solo** para las pruebas de aceptación (los niveles 1 y 2 no lo necesitan)   |
+| Docker (opcional)       | Alternativa a MySQL local: `npm run infra:up`                                 |
 
 Los comandos se ejecutan desde la **raíz del repositorio**, salvo donde se indique otro directorio.
 
@@ -21,27 +21,27 @@ Los comandos se ejecutan desde la **raíz del repositorio**, salvo donde se indi
 ## 1. Unitarias e integración del backend (sin MySQL)
 
 ```bash
-npm test --prefix backend                   # 100 casos: 74 unitarios + 26 de integración
+npm test --prefix backend                   # 138 casos: 74 unitarios + 64 de integración
 npm run test:unit --prefix backend          # solo unitarios (74)
-npm run test:integracion --prefix backend   # solo integración (26)
+npm run test:integracion --prefix backend   # solo integración (64)
 ```
 
 **Salida esperada (final del reporte):**
 
 ```
-ℹ tests 100
-ℹ pass 100
+ℹ tests 138
+ℹ pass 138
 ℹ fail 0
 ```
 
 Cada línea `✔` es un caso aprobado; las líneas `✖` muestran el `AssertionError` y la línea exacta del fallo.
 
-Las suites del nivel 1 viven en `backend/test/*.test.js` (`authorize`, `backup`, `cune`, `helpers`, `jwt`, `login`, `validate`, `validators`) y la de integración en `backend/test/integracion/facturas.api.test.js`, que levanta Express en un puerto efímero con un doble de MySQL que registra la traza transaccional.
+Las suites del nivel 1 viven en `backend/test/*.test.js` (`authorize`, `backup`, `cune`, `helpers`, `jwt`, `login`, `validate`, `validators`) y las de integración en `backend/test/integracion/` (`facturas.api.test.js`, `clientes.api.test.js`, `productos.api.test.js`), que levantan Express en un puerto efímero con un doble de MySQL que reproduce el contrato SQL real y registra la traza transaccional.
 
 Suites destacadas:
 
 - `login.test.js` (10 casos): el login no expone el token en el cuerpo, lo entrega con `X-Token-Response`, reinicia el contador de intentos, bloquea temporalmente la cuenta (423) incluso con la contraseña correcta, calcula el bloqueo dentro de SQL (evita el desfase de zona horaria), acumula intentos fallidos y no enumera usuarios, y responde 401 (no 500) ante una contraseña no textual (por ejemplo un número, que haría lanzar una excepción a `bcrypt.compare`).
-- `backup.test.js` (8 casos): determinismo del checksum SHA‑256, rechazo de *path traversal*, rechazo de archivos que no son respaldos, rechazo de cabecera alterada, rechazo de huella que no coincide y 404 si el respaldo no existe.
+- `backup.test.js` (8 casos): determinismo del checksum SHA‑256, rechazo de _path traversal_, rechazo de archivos que no son respaldos, rechazo de cabecera alterada, rechazo de huella que no coincide y 404 si el respaldo no existe.
 
 ---
 
@@ -111,7 +111,7 @@ El script devuelve **código de salida 0** si todo pasa y **1** si algo falla, p
 ## 4. Atajos desde la raíz
 
 ```bash
-npm test               # backend (100) + frontend (37)
+npm test               # backend (138) + frontend (37)
 npm run test:backend
 npm run test:frontend
 npm run test:e2e       # aceptación (requiere API + MySQL)
@@ -132,12 +132,12 @@ npm run test:e2e       # aceptación (requiere API + MySQL)
 
 ## 6. Evidencia de la ejecución
 
-Guarde la salida de cada suite en un archivo temporal (o cópiela desde la consola):
+Guarde la salida de cada suite en un archivo relativo (o cópiela desde la consola):
 
 ```bash
-npm test --prefix backend 2>&1 | tee /tmp/salida-backend.txt
-npm test --prefix frontend -- --watch=false 2>&1 | tee /tmp/salida-frontend.txt
-npm run test:e2e 2>&1 | tee /tmp/salida-e2e.txt
+npm test --prefix backend 2>&1 | tee salida-backend.txt
+npm test --prefix frontend -- --watch=false 2>&1 | tee salida-frontend.txt
+npm run test:e2e 2>&1 | tee salida-e2e.txt
 ```
 
 Las facturas generadas por el E2E quedan identificadas con su número `FAC-YYYYMM-XXXXX`, lo que permite adjuntarlas como evidencia documental.
@@ -148,11 +148,11 @@ Las facturas generadas por el E2E quedan identificadas con su número `FAC-YYYYM
 
 | Síntoma                                                                     | Causa                                                            | Solución                                                                                |
 | --------------------------------------------------------------------------- | ---------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| `fetch failed` en CA-01                                                     | La API no está en ejecución                                      | `npm run dev --prefix backend` o `npm start --prefix backend`                            |
-| `[e2e] Faltan E2E_PASSWORD y/o E2E_VENDEDOR_PASSWORD`                       | El seed ya no crea contraseñas por defecto                       | Definir ambas variables con las claves del seed antes de ejecutar `npm run test:e2e`     |
-| CA-02 falla por credenciales                                                | Base de datos sin semilla o contraseña distinta                  | `npm run db:seed --prefix backend` con `SEED_*_PASSWORD`                                 |
+| `fetch failed` en CA-01                                                     | La API no está en ejecución                                      | `npm run dev --prefix backend` o `npm start --prefix backend`                           |
+| `[e2e] Faltan E2E_PASSWORD y/o E2E_VENDEDOR_PASSWORD`                       | El seed ya no crea contraseñas por defecto                       | Definir ambas variables con las claves del seed antes de ejecutar `npm run test:e2e`    |
+| CA-02 falla por credenciales                                                | Base de datos sin semilla o contraseña distinta                  | `npm run db:seed --prefix backend` con `SEED_*_PASSWORD`                                |
 | CA-15 aparece como `OMITIDO`                                                | El usuario vendedor no existe                                    | `npm run db:seed --prefix backend`                                                      |
-| No se conoce la contraseña del seed                                         | El seed solo la imprime una vez                                  | Volver a sembrar definiendo `SEED_*_PASSWORD`                                            |
+| No se conoce la contraseña del seed                                         | El seed solo la imprime una vez                                  | Volver a sembrar definiendo `SEED_*_PASSWORD`                                           |
 | `You installed esbuild for another platform` / `Cannot find native binding` | `node_modules` proviene de otro sistema operativo (Linux/Docker) | Ejecutar `npm ci` en este equipo                                                        |
 | `EADDRINUSE :::4000`                                                        | Otra API ocupa el puerto                                         | Detener el proceso (Ctrl+C) o usar `PORT=4100` con `E2E_BASE_URL=http://127.0.0.1:4100` |
 | Las pruebas del frontend se quedan escuchando                               | `ng test` en modo observador                                     | Añadir `-- --watch=false`                                                               |

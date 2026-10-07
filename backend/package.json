@@ -25,6 +25,9 @@
   ],
   "author": "Jhon Henry Romero",
   "license": "MIT",
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "dependencies": {
     "bcryptjs": "^3.0.3",
     "cookie-parser": "^1.4.7",

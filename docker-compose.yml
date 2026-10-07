@@ -73,6 +73,13 @@ services:
     #   - "127.0.0.1:4000:4000"
     expose:
       - "4000"
+    healthcheck:
+      # node:alpine incluye wget (busybox): sirve para esperar la API.
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:4000/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 40s
 
   # ---------- Frontend (SPA servida por nginx) ----------
   frontend:
@@ -80,9 +87,18 @@ services:
     container_name: facturaexpress-web
     restart: unless-stopped
     depends_on:
-      - api
+      api:
+        condition: service_healthy
     ports:
       - "4200:80"
+    healthcheck:
+      # nginx solo escucha en IPv4: usar 127.0.0.1 y no localhost, que
+      # dentro del contenedor resuelve primero a ::1 y da "connection refused".
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
 
 volumes:
   db_data:

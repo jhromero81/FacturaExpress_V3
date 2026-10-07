@@ -1,0 +1,144 @@
+# ============================================================
+# FacturaExpress - Entorno de DESARROLLO
+#
+# Por defecto levanta SOLO la infraestructura de apoyo; la API y la
+# SPA corren en el host con `npm run dev` (recarga automatica):
+#
+#   db       -> MySQL 8.4 en el puerto 3308 (BD desechable)
+#   mail     -> Mailpit: captura los correos en http://localhost:8025
+#   adminer  -> UI web para inspeccionar la BD en http://localhost:8080
+#
+# Con el perfil "app" se anade la API containerizada (nodemon sobre el
+# codigo montado), util para quien no quiera instalar Node en el host:
+#
+#   docker compose -f docker-compose.dev.yml --profile app up
+#
+# Por que un proyecto Compose aparte: el `docker-compose.yml` de
+# produccion es para desplegar (un solo punto de entrada, secretos
+# obligatorios). Este archivo solo publica puertos en 127.0.0.1 y usa
+# el nombre de proyecto `facturaexpress-dev` para no chocar con otros
+# compose del equipo.
+#
+# Uso (o los atajos npm run infra:*):
+#   docker compose -f docker-compose.dev.yml up -d
+#   docker compose -f docker-compose.dev.yml down          # conserva datos
+#   docker compose -f docker-compose.dev.yml down -v       # borra la BD dev
+#
+# Las credenciales de desarrollo tienen valores por defecto para que
+# `docker compose up` funcione en un clon recien hecho, sin crear .env.
+# Se pueden sobrescribir con las variables DEV_* del archivo .env.
+#
+# backend/.env (generado por scripts/bootstrap.js) ya apunta aqui:
+#   DB_HOST=127.0.0.1 / DB_PORT=3308 / DB_SKIP_CREATE=1
+#   MAIL_HOST=127.0.0.1 / MAIL_PORT=1025
+# (dejar MAIL_USERNAME/MAIL_PASSWORD vacios desactiva el envio, segun
+#  services/email.service.js)
+# ============================================================
+
+name: facturaexpress-dev
+
+services:
+  # ---------- Base de datos de desarrollo ----------
+  db:
+    image: mysql:8.4
+    container_name: facturaexpress-dev-db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DEV_MYSQL_ROOT_PASSWORD:-devroot}
+      MYSQL_DATABASE: ${DEV_DB_NAME:-facturaexpress_apirest}
+    # Solo accesible desde el equipo: el 3306 del host puede estar en uso.
+    ports:
+      - "127.0.0.1:${DEV_DB_PORT:-3308}:3306"
+    volumes:
+      - db_dev_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${DEV_MYSQL_ROOT_PASSWORD:-devroot}"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  # ---------- Buzon de correo de pruebas ----------
+  mail:
+    # Version fijada (no "latest") para que la imagen sea reproducible.
+    image: axllent/mailpit:v1.31.4
+    container_name: facturaexpress-dev-mail
+    restart: unless-stopped
+    environment:
+      MP_MAX_MESSAGES: 500
+      MP_SMTP_AUTH_ACCEPT_ANY: 1        # acepta cualquier usuario/clave (dev)
+      MP_SMTP_AUTH_ALLOW_INSECURE: 1
+    ports:
+      - "127.0.0.1:1025:1025"           # SMTP
+      - "127.0.0.1:8025:8025"           # UI web
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+  # ---------- Administrador de BD ----------
+  adminer:
+    image: adminer:6.1.1
+    container_name: facturaexpress-dev-adminer
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ADMINER_DEFAULT_SERVER: db
+    ports:
+      - "127.0.0.1:8080:8080"
+
+  # ---------- API containerizada (opcional, perfil "app") ----------
+  # Permite el flujo completo por Docker sin instalar Node en el host.
+  # El puerto del host es DEV_API_PORT (4000 por defecto); uselo para
+  # evitar choques con otros servicios.
+  api:
+    profiles: ["app"]
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    container_name: facturaexpress-dev-api
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      PORT: 4000
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_NAME: ${DEV_DB_NAME:-facturaexpress_apirest}
+      DB_USER: root
+      DB_PASSWORD: ${DEV_MYSQL_ROOT_PASSWORD:-devroot}
+      DB_SKIP_CREATE: "1"
+      JWT_SECRET: ${DEV_JWT_SECRET:-secreto_de_desarrollo_no_usar_en_produccion}
+      CORS_ORIGIN: http://localhost:4200
+      TRUST_PROXY: "false"
+      MAIL_HOST: mail
+      MAIL_PORT: "1025"
+      MAIL_USERNAME: dev@facturaexpress.local
+      MAIL_PASSWORD: dev
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-Admin123*}
+      SEED_VENDEDOR_PASSWORD: ${SEED_VENDEDOR_PASSWORD:-Vendedor123*}
+      SEED_CONTADOR_PASSWORD: ${SEED_CONTADOR_PASSWORD:-Contador123*}
+    depends_on:
+      db:
+        condition: service_healthy
+    # --legacy-watch fuerza el sondeo (polling) de archivos: los bind
+    # mounts de Windows no notifican cambios a Linux, asi que sin esto
+    # nodemon nunca detecta una edicion del codigo montado.
+    command: sh -c "node scripts/seed.js && node scripts/migrate.js && npm run dev -- --legacy-watch"
+    ports:
+      - "127.0.0.1:${DEV_API_PORT:-4000}:4000"
+    volumes:
+      # El codigo se monta para tener recarga automatica; node_modules
+      # se conserva dentro del contenedor (volumen anonimo).
+      - ./backend:/app
+      - /app/node_modules
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:4000/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 40s
+
+volumes:
+  db_dev_data:

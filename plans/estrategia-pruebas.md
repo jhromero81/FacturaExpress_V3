@@ -86,7 +86,7 @@ Ejecutan sin MySQL, sin red y en menos de un segundo: la base de datos se sustit
 
 ### 4.1 Suite del módulo de facturación
 
-Archivo: [`backend/test/integracion/facturas.api.test.js`](../backend/test/integracion/facturas.api.test.js) — **18 casos**.
+Archivo: [`backend/test/integracion/facturas.api.test.js`](../backend/test/integracion/facturas.api.test.js) — **26 casos**.
 
 Técnica: se levanta una instancia real de Express en un puerto efímero y se ejercita por HTTP con `fetch`; `config/db` se reemplaza por un **doble de MySQL** que reproduce el contrato de `mysql2` (`pool.query`, `getConnection`, `beginTransaction`, `commit`, `rollback`) y **registra la traza de sentencias**, de modo que la transacción se audita sin depender del motor.
 
@@ -282,4 +282,4 @@ npm test
 
 ## 13. Conclusión
 
-La estrategia concentra el esfuerzo en la base de la pirámide (72 casos unitarios sobre reglas de negocio financieras, validación de estructuras y autorización) y reserva 18 casos de integración para verificar la pila HTTP–DAO con transacciones ACID, más 16 casos de aceptación que certifican el flujo completo de emisión de la factura electrónica, el inventario, el ciclo DIAN y las descargas XML/PDF/CSV. Con las suites en verde (65/65 backend, 25/25 frontend y 16/16 aceptación contra la base real), el proyecto dispone de una red de seguridad verificable y reproducible, lista para un pipeline de integración continua.
+La estrategia concentra el esfuerzo en la base de la pirámide (74 casos unitarios sobre reglas de negocio financieras, validación de estructuras y autorización) y reserva 64 casos de integración para verificar la pila HTTP–DAO con transacciones ACID, más 21 casos de aceptación que certifican el flujo completo de emisión de la factura electrónica, el inventario, el ciclo DIAN y las descargas XML/PDF/CSV. Con las suites en verde (138/138 backend, 37/37 frontend y 21/21 aceptación contra la base real), el proyecto dispone de una red de seguridad verificable y reproducible, lista para un pipeline de integración continua.

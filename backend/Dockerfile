@@ -1,9 +1,11 @@
 # ============================================================
 # FacturaExpress API - Imagen Docker
-# Stack: Node.js 18 + Express
+# Stack: Node.js 22 + Express
+# La version de Node esta alineada con .nvmrc (22), con el campo
+# "engines" de package.json y con el frontend y el pipeline de CI.
 # ============================================================
 
-FROM node:18-alpine
+FROM node:22-alpine
 
 WORKDIR /app
 

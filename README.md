@@ -28,7 +28,7 @@ colombianas (punto de venta, facturación con flujo DIAN, reportes y administrac
 | Correo                 | nodemailer (envío de facturas por email) |
 | Variables de entorno   | dotenv                                   |
 | CORS                   | cors (origen del frontend configurable)  |
-| Pruebas                | node --test (100 pruebas en 9 archivos)  |
+| Pruebas                | node --test (138 pruebas en 11 archivos) |
 | Control de versiones   | Git + GitHub                             |
 
 ### Frontend (aplicación web)
@@ -54,16 +54,22 @@ colombianas (punto de venta, facturación con flujo DIAN, reportes y administrac
 FacturaExpress_V3/
 ├── package.json                   # Scripts raíz del monorepo (setup, dev, test…)
 ├── package-lock.json              # Dependencias del orquestador raíz (concurrently)
+├── .nvmrc                         # Versión de Node del proyecto (22)
 ├── .gitattributes                 # Finales de línea LF (compatibilidad Windows/Linux)
-├── docker-compose.yml             # Orquestacion: MySQL 8 + API + frontend
+├── docker-compose.yml             # Orquestación de despliegue: MySQL 8 + API + frontend
+├── docker-compose.dev.yml         # Entorno de desarrollo: infraestructura + perfil app
 ├── .env.example                   # Plantilla de variables para Docker Compose
 ├── .github/workflows/ci.yml       # CI: pruebas backend, auditoria de dependencias,
 │                                  # pruebas + build del frontend y aceptacion E2E
+├── scripts/
+│   ├── bootstrap.js               # Prepara los .env y verifica Node en cualquier SO
+│   └── clean-ports.js             # Libera puertos ocupados en desarrollo
 ├── backend/                       # API REST Node.js + Express + MySQL
 │   ├── package.json               # Dependencias y scripts
 │   ├── .env.example               # Plantilla de variables de entorno
 │   ├── .dockerignore              # Excluye node_modules/.env de la imagen
-│   ├── Dockerfile                 # Imagen Docker (Node 18 Alpine, usuario node)
+│   ├── Dockerfile                 # Imagen de producción (Node 22 Alpine, usuario node)
+│   ├── Dockerfile.dev             # Imagen de desarrollo (nodemon sobre volumen, perfil app)
 │   ├── server.js                  # Punto de entrada de la API
 │   ├── config/
 │   │   ├── db.js                  # Pool de conexiones MySQL
@@ -84,7 +90,7 @@ FacturaExpress_V3/
 │   │   ├── schema.sql             # Creacion de BD y 12 tablas
 │   │   └── seedData.js            # Datos iniciales para el seed
 │   ├── scripts/                   # setupDb.js, migrate.js, seed.js, pruebas-aceptacion.js
-│   └── test/                      # 9 suites: 100 pruebas (74 unitarias + 26 de integracion)
+│   └── test/                      # 11 suites: 138 pruebas (74 unitarias + 64 de integracion)
 ├── frontend/                      # Aplicación web Angular 22
 │   ├── proxy.conf.json            # /api → http://localhost:4000
 │   ├── angular.json               # Configuración del workspace
@@ -92,6 +98,8 @@ FacturaExpress_V3/
 │   ├── .dockerignore              # Excluye node_modules/dist de la imagen
 │   ├── Dockerfile                 # Imagen multi-stage (build + nginx)
 │   ├── nginx.conf                 # SPA + proxy /api al servicio api + CSP
+│   ├── src/fonts.css              # @font-face de las fuentes autoalojadas
+│   ├── public/assets/fonts/       # Roboto, Space Mono y Material Icons (sin CDN)
 │   ├── nginx-ssl.conf             # Variante HTTPS con HSTS
 │   └── src/
 │       ├── styles.css             # Sistema de diseño (variables y temas)
@@ -725,7 +733,7 @@ consola del seed para copiar las contraseñas generadas.
 | `npm run dev:web`                | Solo el frontend en `http://localhost:4200`.                           |
 | `npm run dev:clean`              | Libera los puertos 4000/4200 si quedaron procesos huérfanos (Windows). |
 | `npm run db:migrate` / `db:seed` | Solo tablas / solo datos de ejemplo.                                   |
-| `npm test`                       | Pruebas del backend (100) y del frontend (37).                         |
+| `npm test`                       | Pruebas del backend (138) y del frontend (37).                         |
 | `npm run test:e2e`               | Suite de aceptación (21 casos; requiere API + MySQL).                  |
 | `npm run build`                  | Build de producción del frontend.                                      |
 
@@ -808,7 +816,7 @@ que redirija `/api` al backend (mismo origen).
 Levanta MySQL 8 + la API + el frontend (nginx) como un solo sistema:
 
 ```bash
-cp .env.example .env      # defina MYSQL_ROOT_PASSWORD, DB_PASSWORD, JWT_SECRET
+npm run env:bootstrap     # genera .env con secretos aleatorios (idempotente)
 docker compose up --build
 # → http://localhost:4200 (SPA y único punto de entrada)
 ```
@@ -818,7 +826,38 @@ prueba) y `migrate`; los datos persisten en el volumen `db_data`. **La API ya no
 publica el puerto 4000 al exterior**: solo nginx es punto de entrada, la imagen
 fija `NODE_ENV=production`, corre con el usuario `node` y ambos `Dockerfile`
 incluyen `.dockerignore`. Existe además `frontend/nginx-ssl.conf` para desplegar
-con HTTPS y HSTS.
+con HTTPS y HSTS. Los servicios `api` y `frontend` publican un `healthcheck`,
+de modo que nginx no arranca hasta que la API responde en `/api/health`.
+
+### Entorno de desarrollo con contenedores
+
+`docker-compose.dev.yml` levanta la infraestructura de apoyo en un proyecto
+Compose aparte (`facturaexpress-dev`), de forma que no interfiere con el stack
+de despliegue ni con otros proyectos del equipo. Todo escucha solo en
+`127.0.0.1`.
+
+```bash
+npm run env:bootstrap     # crea los .env (una sola vez)
+npm run infra:up          # MySQL 3308 + Mailpit + Adminer
+npm run db:seed && npm run db:migrate   # el seed va ANTES de migrate
+npm run dev               # API + Angular en el host, con recarga automática
+```
+
+| Servicio | Puerto | Para qué                                         |
+| -------- | ------ | ------------------------------------------------ |
+| MySQL    | 3308   | base de datos desechable del proyecto            |
+| Mailpit  | 8025   | buzón web que captura los correos de facturas    |
+| Adminer  | 8080   | inspeccionar la base de datos desde el navegador |
+
+Con el perfil `app` la API también se ejecuta en un contenedor, para quien
+prefiera no instalar Node en el host:
+
+```bash
+npm run infra:full        # infraestructura + API containerizada (nodemon)
+```
+
+Atajos disponibles: `npm run infra:up`, `infra:full`, `infra:down`
+(conserva datos) e `infra:reset` (borra la base de datos de desarrollo).
 
 ---
 
@@ -855,7 +894,7 @@ curl -s http://localhost:4000/api/reportes/kpis -H "Authorization: Bearer $TOKEN
 
 ## 9. Pruebas de software
 
-Conteo real medido ejecutando las suites: **100 pruebas del backend**, **37 del
+Conteo real medido ejecutando las suites: **138 pruebas del backend**, **37 del
 frontend** y **21 casos de aceptación E2E**.
 
 ### 9.1 Unitarias e integración del backend (node --test)
@@ -864,19 +903,21 @@ frontend** y **21 casos de aceptación E2E**.
 npm test --prefix backend
 ```
 
-**100 pruebas en 9 archivos** (74 unitarias + 26 de integración):
+**138 pruebas en 11 archivos** (74 unitarias + 64 de integración):
 
-| Archivo                                 | Tests | Cubre                                                                                         |
-| --------------------------------------- | ----- | --------------------------------------------------------------------------------------------- |
-| `test/authorize.test.js`                | 9     | Matriz de permisos por rol en las rutas.                                                      |
-| `test/backup.test.js`                   | 8     | Respaldos, huella SHA-256 y restauración.                                                     |
-| `test/cune.test.js`                     | 6     | Hash CUFE SHA-256 determinista.                                                               |
-| `test/helpers.test.js`                  | 23    | Números de factura, formato moneda, cálculo de IVA.                                           |
-| `test/jwt.test.js`                      | 7     | Firma/verificación de tokens, emisor, audiencia y expiración.                                 |
-| `test/login.test.js`                    | 10    | Inicio de sesión, bloqueo de cuenta, mensajes de error y contraseña no textual (401, no 500). |
-| `test/validate.test.js`                 | 2     | Middleware central de validaciones (400).                                                     |
-| `test/validators.test.js`               | 9     | Reglas de negocio por módulo (login, cliente, producto).                                      |
-| `test/integracion/facturas.api.test.js` | 26    | API de facturación con doble de MySQL (transacciones, estados, totales).                      |
+| Archivo                                  | Tests | Cubre                                                                                         |
+| ---------------------------------------- | ----- | --------------------------------------------------------------------------------------------- |
+| `test/authorize.test.js`                 | 9     | Matriz de permisos por rol en las rutas.                                                      |
+| `test/backup.test.js`                    | 8     | Respaldos, huella SHA-256 y restauración.                                                     |
+| `test/cune.test.js`                      | 6     | Hash CUFE SHA-256 determinista.                                                               |
+| `test/helpers.test.js`                   | 23    | Números de factura, formato moneda, cálculo de IVA.                                           |
+| `test/jwt.test.js`                       | 7     | Firma/verificación de tokens, emisor, audiencia y expiración.                                 |
+| `test/login.test.js`                     | 10    | Inicio de sesión, bloqueo de cuenta, mensajes de error y contraseña no textual (401, no 500). |
+| `test/validate.test.js`                  | 2     | Middleware central de validaciones (400).                                                     |
+| `test/validators.test.js`                | 9     | Reglas de negocio por módulo (login, cliente, producto).                                      |
+| `test/integracion/clientes.api.test.js`  | 17    | API de clientes: CRUD, duplicados (NIT/email) y permisos por rol.                             |
+| `test/integracion/facturas.api.test.js`  | 26    | API de facturación con doble de MySQL (transacciones, estados, totales).                      |
+| `test/integracion/productos.api.test.js` | 21    | API de productos: CRUD, ajuste de stock, stock insuficiente y permisos.                       |
 
 ### 9.2 Unitarias del frontend (Vitest + jsdom)
 
@@ -955,7 +996,7 @@ Medidas implementadas para proteger la aplicación:
 | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Cookie httpOnly**          | El token JWT viaja en la cookie `token` con `HttpOnly` y `SameSite=Lax`, inmune a XSS (JavaScript no puede leerla). El token solo se devuelve en el cuerpo si el cliente envía `X-Token-Response: true`.                                                                                                                     |
 | **Cookie `Secure`**          | Con `NODE_ENV=production` la cookie solo viaja por HTTPS.                                                                                                                                                                                                                                                                    |
-| **Helmet**                   | Cabeceras HTTP de seguridad: `X-Frame-Options`, `X-Content-Type-Options`, HSTS, etc. (`server.js`). La CSP de nginx autoriza los dominios de Google Fonts (`fonts.googleapis.com` / `fonts.gstatic.com`) que usa `index.html`.                                                                                               |
+| **Helmet**                   | Cabeceras HTTP de seguridad: `X-Frame-Options`, `X-Content-Type-Options`, HSTS, etc. (`server.js`). La CSP de nginx es estricta: las fuentes (Roboto, Space Mono y Material Icons) se sirven autoalojadas desde `/assets/fonts`, sin dominios externos.                                                                      |
 | **Límite de peticiones**     | Login: 5 intentos/15 min por IP (`loginLimiter`). API anónima: 120 peticiones/min por IP (`apiLimiter`). Clientes autenticados: 600/min (`apiAuthLimiter`). El cupo autenticado exige la **firma válida** del JWT (un encabezado `Bearer x` inventado ya no lo evade). `/api/health` exenta para monitoreo. Responden `429`. |
 | **Bloqueo de cuenta**        | Tras 5 intentos fallidos la cuenta se bloquea 15 minutos y responde `423`; los intentos se reinician al iniciar sesión correctamente.                                                                                                                                                                                        |
 | **Validación de entrada**    | `express-validator` valida tipos, formatos y rangos antes del controlador; responde `400` con la lista de campos (`middleware/validate.js`).                                                                                                                                                                                 |

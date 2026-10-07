@@ -3,8 +3,16 @@
   "version": "1.0.0",
   "private": true,
   "description": "FacturaExpress - Monorepositorio (API REST + Frontend Angular)",
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "scripts": {
-    "setup": "npm install && npm run install:all && npm run db:setup",
+    "setup": "node scripts/bootstrap.js && npm install && npm run install:all && npm run db:setup",
+    "env:bootstrap": "node scripts/bootstrap.js",
+    "infra:up": "docker compose -f docker-compose.dev.yml up -d",
+    "infra:down": "docker compose -f docker-compose.dev.yml down",
+    "infra:reset": "docker compose -f docker-compose.dev.yml down -v",
+    "infra:full": "docker compose -f docker-compose.dev.yml --profile app up -d",
     "install:all": "npm install --prefix backend && npm install --prefix frontend",
     "dev": "concurrently -k -n api,web -c blue,green \"npm run dev --prefix backend\" \"npm start --prefix frontend\"",
     "dev:clean": "node scripts/clean-ports.js",
