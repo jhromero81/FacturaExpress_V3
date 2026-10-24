@@ -1,0 +1,20 @@
+$kind: http-request
+url: "{{baseUrl}}/facturas/{{facturaId}}/notas-credito"
+method: GET
+headers:
+  Authorization: Bearer {{token}}
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Notas credito consultadas (HTTP 200)', function () {
+          pm.response.to.have.status(200);
+      });
+      const json = pm.response.json();
+      pm.test('La nota credito de la anulacion esta registrada', function () {
+          pm.expect(json.notas).to.be.an('array');
+          pm.expect(json.notas.length).to.be.above(0);
+          pm.expect(json.notas[0].numero).to.match(/^NC-/);
+          pm.expect(json.notas[0].total).to.be.above(0);
+      });
+    language: text/javascript
+order: 4020

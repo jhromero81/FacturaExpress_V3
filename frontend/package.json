@@ -8,7 +8,8 @@
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
     "check:native": "node scripts/check-native-binaries.js",
-    "postinstall": "node scripts/check-native-binaries.js"
+    "postinstall": "node scripts/check-native-binaries.js",
+    "check:contraste": "node scripts/check-contraste.mjs"
   },
   "private": true,
   "engines": {

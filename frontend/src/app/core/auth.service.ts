@@ -36,6 +36,18 @@ const TAMANOS_FUENTE: Record<Preferencias['tamanoTexto'], string> = {
   large: '18px',
 };
 
+/**
+ * Modo oscuro y alto contraste son excluyentes: cada uno define la paleta
+ * completa, y aplicarlos a la vez mezcla tokens de los dos (texto claro del
+ * modo oscuro sobre el fondo blanco del alto contraste, bordes negros sobre
+ * fondo negro...). Si por un estado guardado antiguo llegan los dos activos,
+ * se conserva el alto contraste, que es el modo de accesibilidad.
+ * Devuelve el mismo objeto si no hay nada que corregir.
+ */
+function normalizarPreferencias(prefs: Preferencias): Preferencias {
+  return prefs.modoOscuro && prefs.altoContraste ? { ...prefs, modoOscuro: false } : prefs;
+}
+
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private api = inject(ApiService);
@@ -106,14 +118,29 @@ export class AuthService {
     this.router.navigate(['/login']);
   }
 
-  /** Alterna el modo oscuro y persiste la preferencia. */
+  /**
+   * Alterna el modo oscuro y persiste la preferencia.
+   * Encenderlo apaga el alto contraste: los dos modos definen la paleta
+   * completa y combinados mezclan tokens de ambos (texto claro del oscuro
+   * sobre el fondo blanco del alto contraste, bordes negros sobre negro).
+   */
   alternarModoOscuro(): void {
-    this.actualizarPreferencias({ modoOscuro: !this.preferencias().modoOscuro });
+    const activar = !this.preferencias().modoOscuro;
+    this.actualizarPreferencias(
+      activar
+        ? { modoOscuro: true, altoContraste: false }
+        : { modoOscuro: false }
+    );
   }
 
-  /** Alterna el alto contraste y persiste la preferencia. */
+  /** Alterna el alto contraste y persiste la preferencia. Encenderlo apaga el modo oscuro. */
   alternarAltoContraste(): void {
-    this.actualizarPreferencias({ altoContraste: !this.preferencias().altoContraste });
+    const activar = !this.preferencias().altoContraste;
+    this.actualizarPreferencias(
+      activar
+        ? { altoContraste: true, modoOscuro: false }
+        : { altoContraste: false }
+    );
   }
 
   /** Establece el tamano del texto (small | medium | large). */
@@ -122,7 +149,11 @@ export class AuthService {
   }
 
   private actualizarPreferencias(cambios: Partial<Preferencias>): void {
-    const nuevas = { ...this.preferencias(), ...cambios };
+    // Red de seguridad: ningun camino puede dejar los dos modos activos.
+    // Si el cambio enciende un modo, el otro se apaga.
+    const nuevas = normalizarPreferencias({ ...this.preferencias(), ...cambios });
+    if (cambios.modoOscuro === true) nuevas.altoContraste = false;
+    if (cambios.altoContraste === true) nuevas.modoOscuro = false;
     localStorage.setItem(CLAVE_PREFS, JSON.stringify(nuevas));
     this.preferencias.set(nuevas);
   }
@@ -130,7 +161,14 @@ export class AuthService {
   private leerPreferencias(): Preferencias {
     try {
       const crudo = localStorage.getItem(CLAVE_PREFS);
-      return crudo ? { ...PREFS_DEFECTO, ...(JSON.parse(crudo) as Partial<Preferencias>) } : PREFS_DEFECTO;
+      if (!crudo) return PREFS_DEFECTO;
+      const guardadas = { ...PREFS_DEFECTO, ...(JSON.parse(crudo) as Partial<Preferencias>) };
+      const normalizadas = normalizarPreferencias(guardadas);
+      // Una version anterior permitia tener los dos modos activos a la vez
+      if (normalizadas !== guardadas) {
+        localStorage.setItem(CLAVE_PREFS, JSON.stringify(normalizadas));
+      }
+      return normalizadas;
     } catch {
       return PREFS_DEFECTO;
     }

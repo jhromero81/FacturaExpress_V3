@@ -89,13 +89,17 @@ CREATE TABLE IF NOT EXISTS facturas (
   iva                    DECIMAL(14,2) NOT NULL,
   descuento              DECIMAL(14,2) NOT NULL DEFAULT 0.00,
   total                  DECIMAL(14,2) NOT NULL,
-  estado                 ENUM('pendiente','enviada','rechazada')
+  estado                 ENUM('pendiente','enviada','rechazada','anulada')
                          NOT NULL DEFAULT 'pendiente',
   cufe                   VARCHAR(150) NULL,
   firma_estado           ENUM('pendiente','firmada','rechazada')
                          NOT NULL DEFAULT 'pendiente',
   intentos_dian          INT          NOT NULL DEFAULT 0,
   correo_enviado         TINYINT(1)   NOT NULL DEFAULT 0,
+  medio_pago             ENUM('efectivo','tarjeta','transferencia','credito')
+                         NOT NULL DEFAULT 'efectivo',
+  plazo_dias             INT UNSIGNED NOT NULL DEFAULT 0,
+  fecha_vencimiento      DATE         NULL,
   created_at             TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at             TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
                          ON UPDATE CURRENT_TIMESTAMP,
@@ -124,6 +128,26 @@ CREATE TABLE IF NOT EXISTS factura_items (
     FOREIGN KEY (producto_id) REFERENCES productos (id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- ------------------------------------------------------------
+-- Tabla: notas_credito
+-- Notas credito que anulan una factura. La factura no se borra:
+-- se conserva el consecutivo y la trazabilidad ante la DIAN.
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS notas_credito (
+  id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  numero      VARCHAR(40)   NOT NULL UNIQUE,
+  factura_id  INT UNSIGNED  NOT NULL,
+  motivo      VARCHAR(200)  NOT NULL,
+  subtotal    DECIMAL(14,2) NOT NULL,
+  iva         DECIMAL(14,2) NOT NULL,
+  total       DECIMAL(14,2) NOT NULL,
+  usuario_id  INT UNSIGNED  NULL,
+  created_at  TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_notas_factura
+    FOREIGN KEY (factura_id) REFERENCES facturas (id) ON DELETE CASCADE,
+  CONSTRAINT fk_notas_usuario
+    FOREIGN KEY (usuario_id) REFERENCES usuarios (id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 -- ------------------------------------------------------------
 -- Tabla: empresa
 -- Datos de la empresa emisora y configuracion fiscal (DIAN).

@@ -64,7 +64,7 @@
   <div class="reportes-content">
     <!-- Grafico de barras comparativo -->
     <div class="content-card">
-      <h3 class="card-title">Comparativa de Ventas</h3>
+      <h2 class="card-title">Comparativa de Ventas</h2>
       <div class="chart-container" #chartRef>
         <svg viewBox="0 0 600 280" class="bar-chart" (mouseleave)="cerrarTooltip()">
           <!-- Lineas de referencia -->
@@ -171,7 +171,7 @@
     <div class="reportes-sidebar">
       <!-- Productos mas vendidos -->
       <div class="content-card">
-        <h3 class="card-title">Productos Mas Vendidos</h3>
+        <h2 class="card-title">Productos Mas Vendidos</h2>
         <div class="top-products">
           @for (p of topProducts(); track p.id; let i = $index) {
             <div class="top-product-item">
@@ -187,7 +187,7 @@
 
       <!-- Meta de ventas mensual -->
       <div class="content-card">
-        <h3 class="card-title">Meta de Ventas</h3>
+        <h2 class="card-title">Meta de Ventas</h2>
         <div class="sales-goal">
           <div class="goal-progress-text">
             <span class="font-mono goal-percent">{{ goalProgress }}%</span>

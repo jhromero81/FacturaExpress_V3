@@ -174,6 +174,29 @@ const createFacturaValidator = [
     .isFloat({ min: 0, max: 100 })
     .withMessage('El descuento debe ser un porcentaje entre 0 y 100.')
     .toFloat(),
+  body('medioPago')
+    .optional({ values: 'falsy' })
+    .isIn(['efectivo', 'tarjeta', 'transferencia', 'credito'])
+    .withMessage('El medio de pago debe ser efectivo, tarjeta, transferencia o credito.'),
+  body('plazoDias')
+    .optional({ values: 'falsy' })
+    .isInt({ min: 0, max: 365 })
+    .withMessage('El plazo en dias debe ser un entero entre 0 y 365.')
+    .toInt(),
+];
+
+// Reglas para POST /api/facturas/:id/nota-credito (anulacion de una factura).
+const notaCreditoValidator = [
+  param('id')
+    .isInt({ min: 1 })
+    .withMessage('El id debe ser un numero entero positivo.')
+    .toInt(),
+  body('motivo')
+    .trim()
+    .notEmpty()
+    .withMessage('El motivo de la anulacion es obligatorio.')
+    .isLength({ min: 5, max: 200 })
+    .withMessage('El motivo debe tener entre 5 y 200 caracteres.'),
 ];
 
 const updateEstadoFacturaValidator = [
@@ -307,6 +330,7 @@ module.exports = {
   ajusteStockValidator,
   createFacturaValidator,
   updateEstadoFacturaValidator,
+  notaCreditoValidator,
   crearUsuarioValidator,
   actualizarUsuarioValidator,
   toggleActivoValidator,

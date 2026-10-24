@@ -42,17 +42,17 @@
 
 .ventas-actions .btn-teal {
   background-color: var(--accent);
-  color: #fff;
+  color: var(--accent-on);
   border: none;
 }
 
 .ventas-actions .btn-teal:hover:not(:disabled) {
-  background-color: var(--accent-dk);
+  background-color: var(--accent);
 }
 
 .ventas-actions .btn-outline-accent {
   background: transparent;
-  color: var(--accent);
+  color: var(--accent-ink);
   border: 1.5px solid var(--accent);
 }
 
@@ -158,7 +158,7 @@
 
 .qty-btn:hover {
   border-color: var(--accent);
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 
 .qty-btn .material-icons {
@@ -167,7 +167,7 @@
 
 .qty-btn.delete-btn {
   border-color: transparent;
-  color: var(--danger);
+  color: var(--danger-ink);
 }
 
 .qty-btn.delete-btn:hover {
@@ -189,6 +189,10 @@
    ============================ */
 .payment-panel {
   background: var(--sidebar-bg);
+  /* Panel oscuro: los tokens de texto se redefinen para ese fondo */
+  --text-muted: var(--sidebar-text);
+  --text-soft: var(--sidebar-text);
+  --text-dark: #ffffff;
   border-radius: 16px;
   padding: 28px;
   color: #fff;
@@ -219,25 +223,148 @@
 }
 
 .payment-row.discount {
-  color: var(--danger);
+  color: var(--danger-ink);
 }
 
-.discount-input input {
-  width: 70px;
-  height: 32px;
-  background: rgba(255, 255, 255, 0.08);
+/* Bloque de descuento: presets, entrada en % o pesos y equivalencia */
+.discount-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.discount-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.discount-label {
+  font-size: 0.88rem;
+  color: var(--text-muted);
+}
+
+.discount-modes {
+  display: flex;
+  gap: 4px;
+}
+
+.discount-mode {
+  width: 30px;
+  height: 24px;
+  background: transparent;
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 6px;
-  color: #fff;
-  text-align: right;
-  padding: 0 10px;
+  color: var(--text-muted);
   font-family: var(--font-mono);
-  outline: none;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all var(--transition);
 }
 
-.discount-input input:focus {
+.discount-mode:hover {
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
+.discount-mode.active {
+  background-color: rgba(26, 188, 156, 0.18);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
+.discount-chips {
+  display: flex;
+  gap: 6px;
+}
+
+.discount-chip {
+  flex: 1;
+  height: 28px;
+  background-color: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.discount-chip:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
+.discount-chip.active {
+  background-color: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-on);
+  font-weight: 700;
+}
+
+.discount-field {
+  display: flex;
+  align-items: center;
+  height: 34px;
+  padding: 0 8px;
+  background-color: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  transition: border-color var(--transition);
+}
+
+.discount-field:focus-within {
   border-color: var(--accent);
 }
+
+.discount-field input {
+  flex: 1;
+  min-width: 0;
+  padding: 0 6px;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #fff;
+  text-align: right;
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+}
+
+.discount-field input:disabled {
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+
+.discount-unit {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.discount-clear {
+  display: flex;
+  padding-left: 4px;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.discount-clear:hover {
+  color: var(--danger-ink);
+}
+
+.discount-clear .material-icons {
+  font-size: 16px;
+}
+
+.discount-help {
+  font-size: 0.72rem;
+  color: var(--text-soft);
+}
+
 
 .payment-divider {
   height: 1px;
@@ -260,14 +387,14 @@
 .total-val {
   font-size: 1.5rem;
   font-weight: 800;
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 
 .btn-finalizar {
   width: 100%;
   padding: 16px;
   background: linear-gradient(135deg, var(--accent), var(--accent-dk));
-  color: #fff;
+  color: var(--accent-on);
   border: none;
   border-radius: 10px;
   font-size: 1rem;
@@ -331,7 +458,7 @@
 
 .client-option .material-icons {
   font-size: 28px;
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 
 .client-option-info {
@@ -361,4 +488,128 @@
   .payment-panel {
     position: static;
   }
+}
+
+/* Medio de pago: cuatro opciones, sin campo de texto */
+.payment-methods-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.payment-methods-label {
+  font-size: 0.88rem;
+  color: var(--text-muted);
+}
+
+.payment-methods {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.payment-method {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 34px;
+  background-color: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  color: var(--text-muted);
+  font-family: var(--font-body);
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.payment-method .material-icons {
+  font-size: 16px;
+}
+
+.payment-method:hover {
+  border-color: var(--accent);
+  color: var(--accent-on-dark);
+}
+
+.payment-method.active {
+  background-color: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-on);
+  font-weight: 700;
+}
+
+/* Plazo de las ventas a credito */
+.payment-term {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.payment-term input {
+  width: 70px;
+  height: 30px;
+  padding: 0 8px;
+  background-color: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  color: #fff;
+  font-family: var(--font-mono);
+  text-align: right;
+}
+
+.payment-term input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+/* Aviso de venta registrada: sustituye al confirm nativo del navegador */
+.venta-reciente {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  background-color: rgba(26, 188, 156, 0.1);
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+  font-size: 0.88rem;
+  color: var(--text-dark);
+}
+
+.venta-reciente .material-icons {
+  font-size: 18px;
+  color: var(--accent-ink);
+}
+
+.venta-reciente-link {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: var(--accent-ink);
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.venta-reciente-close {
+  display: flex;
+  align-items: center;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  min-width: 24px;
+  min-height: 24px;
+}
+
+.venta-reciente-close .material-icons {
+  font-size: 16px;
+  color: inherit;
 }

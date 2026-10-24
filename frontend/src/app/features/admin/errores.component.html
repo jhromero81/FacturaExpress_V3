@@ -27,7 +27,7 @@
   <!-- Filtros -->
   <div class="errores-toolbar">
     <div class="filter-group">
-      <select class="filter-select" [(ngModel)]="tipoFilter" (ngModelChange)="loadErrores()" name="tipoFilter">
+      <select class="filter-select" aria-label="Filtrar por tipo" [(ngModel)]="tipoFilter" (ngModelChange)="loadErrores()" name="tipoFilter">
         <option value="">Todos los tipos</option>
         @for (t of tipos; track t) {
           <option [value]="t">{{ tipoLabel(t) }}</option>
@@ -35,6 +35,7 @@
       </select>
       <select
         class="filter-select"
+        aria-label="Filtrar por estado"
         [(ngModel)]="resueltoFilter"
         (ngModelChange)="loadErrores()"
         name="resueltoFilter"

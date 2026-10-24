@@ -5,11 +5,19 @@
    ============================================================ */
 
 :root {
-  /* Colores principales */
-  --accent: #1abc9c;
-  --accent-dk: #148f77;
-  --danger: #e74c3c;
-  --danger-dk: #c0392b;
+  /* Colores principales.
+     Cada color existe en dos papeles: como relleno (--x) y como tinta
+     (--x-ink, para texto e iconos). Los pares estan calculados para superar
+     4,5:1 (WCAG 2.1 AA, criterio 1.4.3) en los tres temas. */
+  --accent: #0b7d66;        /* relleno de botones: 5,07:1 con texto blanco */
+  --accent-on: #ffffff;     /* texto sobre --accent */
+  --accent-ink: #0b7d66;    /* acento como texto: 5,07:1 sobre blanco */
+  --accent-dk: #08654f;     /* hover del relleno */
+  --accent-soft: #1abc9c;   /* solo decorativo sobre fondos oscuros */
+  --accent-on-dark: #43e3bd;/* acento como texto sobre fondo oscuro */
+  --danger: #b3372b;
+  --danger-ink: #b3372b;
+  --danger-dk: #922c22;
 
   /* Colores de fondo y estructura */
   --sidebar-bg: #0f1923;
@@ -17,16 +25,22 @@
   --card-bg: #ffffff;
 
   /* Colores de texto */
-  --text-dark: #1a2535;
-  --text-muted: #90a4ae;
+  --text-dark: #16202c;
+  --text-muted: #5b6f7a;    /* 5,25:1 sobre blanco y 4,85:1 sobre el fondo */
+  --text-soft: #5b6f7a;
+  --sidebar-text: #c7d3da;
+  --sidebar-muted: #9db0bc;
 
   /* Bordes y divider */
-  --border: #eceff1;
+  --border: #dfe6ea;
 
-  /* Estados */
-  --success: #27ae60;
-  --warning: #f39c12;
-  --info: #3498db;
+  /* Estados: relleno y tinta por separado */
+  --success: #147a45;
+  --success-ink: #147a45;
+  --warning: #96600a;
+  --warning-ink: #96600a;
+  --info: #1f6ea5;
+  --info-ink: #1f6ea5;
 
   /* Dimensiones */
   --sidebar-w: 230px;
@@ -41,6 +55,9 @@
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
   --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
+
+  /* Sombra del boton principal (la usaba Login.css sin estar definida) */
+  --shadow-accent: 0 4px 14px rgba(26, 188, 156, 0.3);
 
   /* Transiciones */
   --transition: 0.3s ease;
@@ -86,12 +103,12 @@ app-root > *:not(router-outlet) {
 }
 
 a {
-  color: var(--accent);
+  color: var(--accent-ink);
   text-decoration: none;
 }
 
 a:hover {
-  color: var(--accent-dk);
+  color: var(--accent-ink);
 }
 
 /* ============================
@@ -104,6 +121,12 @@ a:hover {
 }
 
 /** Indicador pulsante de estado activo */
+.pulse-dot.muted {
+  background-color: var(--text-muted);
+  box-shadow: none;
+  animation: none;
+}
+
 .pulse-dot {
   display: inline-block;
   width: 8px;
@@ -123,7 +146,7 @@ a:hover {
 /** Boton generico teal */
 .btn-teal {
   background-color: var(--accent);
-  color: #fff;
+  color: var(--accent-on);
   border: none;
   padding: 10px 24px;
   border-radius: 40px;
@@ -135,7 +158,7 @@ a:hover {
 }
 
 .btn-teal:hover {
-  background-color: var(--accent-dk);
+  background-color: var(--accent);
   transform: translateY(-1px);
 }
 
@@ -168,8 +191,8 @@ a:hover {
 /** Boton con borde accent (outline) */
 .btn-outline-accent {
   background: transparent;
-  color: var(--accent);
-  border: 2px solid var(--accent);
+  color: var(--accent-ink);
+  border: 2px solid var(--accent-ink);
   padding: 8px 22px;
   border-radius: 40px;
   cursor: pointer;
@@ -181,7 +204,7 @@ a:hover {
 
 .btn-outline-accent:hover:not(:disabled) {
   background-color: var(--accent);
-  color: #fff;
+  color: var(--accent-on);
 }
 
 .btn-outline-accent:disabled {
@@ -210,7 +233,7 @@ a:hover {
 /** Boton de peligro compacto */
 .btn-danger-compact {
   background: linear-gradient(135deg, var(--danger), var(--danger-dk));
-  color: #fff;
+  color: var(--accent-on);
   border: none;
   padding: 8px 20px;
   border-radius: 40px;
@@ -275,10 +298,30 @@ a:hover {
 body.fx-dark-mode {
   --bg-main: #121212;
   --card-bg: #1e2a32;
-  --text-dark: #e0e0e0;
-  --text-muted: #78909c;
-  --border: #2c3e50;
+  --text-dark: #e8eef2;
+  --text-muted: #90a4ae;      /* 5,66:1 sobre la tarjeta oscura */
+  --text-soft: #90a4ae;
+  --border: #3d566e;          /* borde visible sobre el fondo oscuro */
   --sidebar-bg: #0a0f14;
+  --sidebar-text: #d5e1e7;
+  --sidebar-muted: #9db0bc;
+
+  /* En oscuro el acento vuelve a ser el teal brillante, pero el texto
+     encima pasa a tinta oscura: blanco sobre teal solo da 2,4:1. */
+  --accent: #1abc9c;
+  --accent-on: #08211c;
+  --accent-ink: #35d3b0;
+  --accent-dk: #16a085;
+  --accent-on-dark: #43e3bd;
+
+  --danger: #ff6b5b;
+  --danger-ink: #ff8a7d;
+  --success: #4ade80;
+  --success-ink: #4ade80;
+  --warning: #f5c451;
+  --warning-ink: #f5c451;
+  --info: #7cc4f0;
+  --info-ink: #7cc4f0;
 }
 
 body.fx-dark-mode .content-card {
@@ -292,14 +335,70 @@ body.fx-dark-mode .btn-flat:hover {
 /* ============================
    ALTO CONTRASTE
    ============================ */
+/* Alto contraste: texto negro sobre blanco y amarillo solo como relleno
+   (el amarillo como texto sobre blanco da 1,1:1). */
 body.fx-high-contrast {
-  --accent: #ffeb3b;
-  --accent-dk: #fdd835;
+  --accent: #ffe000;
+  --accent-on: #000000;
+  --accent-ink: #000000;
+  --accent-dk: #f0d000;
+  --accent-soft: #ffe000;
+  --accent-on-dark: #ffe000;
+  --danger: #000000;
+  --danger-ink: #000000;
+  --danger-dk: #000000;
+  --success: #000000;
+  --success-ink: #000000;
+  --warning: #000000;
+  --warning-ink: #000000;
+  --info: #000000;
+  --info-ink: #000000;
   --text-dark: #000000;
+  --text-muted: #000000;
+  --text-soft: #000000;
   --bg-main: #ffffff;
   --card-bg: #ffffff;
   --border: #000000;
   --sidebar-bg: #000000;
+  --sidebar-text: #ffffff;
+  --sidebar-muted: #ffffff;
+}
+
+/* Los avisos de estado usan tintes translucidos que en alto contraste
+   se quedan sin contraste: se sustituyen por caja blanca con borde negro. */
+body.fx-high-contrast .badge-status,
+body.fx-high-contrast .rol-badge,
+body.fx-high-contrast .client-id,
+body.fx-high-contrast .stock-badge,
+body.fx-high-contrast .tab-btn.active {
+  background-color: #ffffff;
+  color: #000000;
+  border: 2px solid #000000;
+  font-weight: 700;
+}
+
+/* Controles que viven dentro de paneles oscuros (resumen de pago):
+   en alto contraste el texto debe ser blanco sobre negro. */
+body.fx-high-contrast .discount-chip,
+body.fx-high-contrast .discount-mode {
+  background-color: #000000;
+  border-color: #ffffff;
+  color: #ffffff;
+}
+
+body.fx-high-contrast .discount-chip.active {
+  background-color: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-on);
+}
+
+body.fx-high-contrast .discount-field {
+  background-color: #000000;
+  border-color: #ffffff;
+}
+
+body.fx-high-contrast .discount-field input {
+  color: #ffffff;
 }
 
 body.fx-high-contrast .content-card {
@@ -308,8 +407,15 @@ body.fx-high-contrast .content-card {
 }
 
 body.fx-high-contrast .btn-teal {
-  color: #000;
+  color: var(--accent-on);
   font-weight: 700;
+}
+
+/* El boton oscuro del panel de respaldos no va sobre el relleno del acento:
+   conserva su fondo negro y su tinta clara (si no, texto negro sobre negro). */
+body.fx-high-contrast .backup-hero .btn-teal {
+  background-color: #000000;
+  color: #ffffff;
 }
 
 body.fx-high-contrast .sidebar {
@@ -357,7 +463,7 @@ body.fx-high-contrast .sidebar {
 
 .data-table thead {
   background-color: var(--sidebar-bg);
-  color: var(--accent);
+  color: var(--accent-on-dark);
 }
 
 .data-table th {
@@ -429,18 +535,27 @@ body.fx-high-contrast .sidebar {
 .badge-status.enviado,
 .badge-status.enviada {
   background-color: rgba(39, 174, 96, 0.12);
-  color: var(--success);
+  color: var(--success-ink);
 }
 
 .badge-status.pendiente {
   background-color: rgba(243, 156, 18, 0.12);
-  color: var(--warning);
+  color: var(--warning-ink);
 }
 
 .badge-status.rechazado,
 .badge-status.rechazada {
   background-color: rgba(231, 76, 60, 0.12);
-  color: var(--danger);
+  color: var(--danger-ink);
+}
+
+/* Factura anulada con nota credito: se tacha para que no parezca vigente.
+   La tinta es --text-dark, no --text-soft: sobre la banda gris translucida
+   el gris suave se quedaba en 4,37:1. */
+.badge-status.anulada {
+  background-color: rgba(120, 144, 156, 0.18);
+  color: var(--text-dark);
+  text-decoration: line-through;
 }
 
 /* ============================
@@ -481,7 +596,7 @@ body.fx-high-contrast .sidebar {
 }
 
 .form-group .error-text {
-  color: var(--danger);
+  color: var(--danger-ink);
   font-size: 0.8rem;
   margin-top: 4px;
 }
@@ -597,13 +712,13 @@ body.fx-high-contrast .sidebar {
 
 .tab-btn:hover {
   border-color: var(--accent);
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 
 .tab-btn.active {
   background-color: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  color: var(--accent-on);
 }
 
 /* Botones de accion en tablas (shared) */
@@ -629,17 +744,17 @@ body.fx-high-contrast .sidebar {
 
 .action-btn:hover:not(:disabled) {
   border-color: var(--accent);
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 
 .action-btn.danger:hover:not(:disabled) {
   border-color: var(--danger);
-  color: var(--danger);
+  color: var(--danger-ink);
 }
 
 .action-btn.restore:hover:not(:disabled) {
   border-color: var(--warning);
-  color: var(--warning);
+  color: var(--warning-ink);
 }
 
 .action-btn:disabled {
@@ -653,7 +768,7 @@ body.fx-high-contrast .sidebar {
 }
 
 .doc-btn.pdf {
-  color: var(--danger);
+  color: var(--danger-ink);
 }
 
 .doc-btn.pdf:hover {
@@ -662,7 +777,7 @@ body.fx-high-contrast .sidebar {
 }
 
 .doc-btn.xml {
-  color: var(--info);
+  color: var(--info-ink);
 }
 
 .doc-btn.xml:hover {
@@ -671,7 +786,7 @@ body.fx-high-contrast .sidebar {
 }
 
 .doc-btn.view {
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 
 .doc-btn.view:hover {
@@ -680,7 +795,7 @@ body.fx-high-contrast .sidebar {
 }
 
 .doc-btn.change {
-  color: var(--warning);
+  color: var(--warning-ink);
 }
 
 .doc-btn.change:hover {
@@ -689,7 +804,7 @@ body.fx-high-contrast .sidebar {
 }
 
 .doc-btn.del {
-  color: var(--danger);
+  color: var(--danger-ink);
 }
 
 .doc-btn.del:hover {
@@ -752,7 +867,7 @@ body.fx-high-contrast .sidebar {
 .suggestion-price {
   font-size: 0.85rem;
   font-weight: 600;
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 
 /* ============================
@@ -887,7 +1002,7 @@ body.fx-high-contrast .sidebar {
 
 .pagination button:hover:not(:disabled) {
   border-color: var(--accent);
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 
 .pagination button:disabled {
@@ -989,7 +1104,7 @@ body.fx-high-contrast .sidebar {
 
 .btn-pagina:hover:not(:disabled) {
   border-color: var(--accent);
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 
 .btn-pagina:disabled {
@@ -999,4 +1114,36 @@ body.fx-high-contrast .sidebar {
 
 .btn-pagina .material-icons {
   font-size: 20px;
+}
+
+/* ============================================================
+   ACCESIBILIDAD DE MOVIMIENTO Y FOCO
+   Mismo bloque que la version React para que ambas aplicaciones
+   respondan igual a las preferencias del sistema.
+   ============================================================ */
+
+/* Respeto a la preferencia de movimiento reducido */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Foco visible homogeneo para navegacion por teclado */
+:focus-visible {
+  outline: 2px solid var(--accent-ink);
+  outline-offset: 2px;
+}
+
+/* En alto contraste el anillo negro desaparece sobre el sidebar negro:
+   se dibuja un doble anillo (negro por dentro, blanco por fuera). */
+body.fx-high-contrast :focus-visible {
+  outline: 3px solid #000000;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 6px #ffffff;
 }

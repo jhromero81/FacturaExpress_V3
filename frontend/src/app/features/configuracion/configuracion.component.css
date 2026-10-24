@@ -55,7 +55,7 @@
 
 .config-nav-item.active {
   background-color: rgba(26, 188, 156, 0.1);
-  color: var(--accent);
+  color: var(--accent-ink);
   font-weight: 600;
 }
 
@@ -89,7 +89,7 @@
 }
 
 .config-title .material-icons {
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 
 .config-form {
@@ -120,12 +120,12 @@
 
 .config-actions .btn-teal {
   background-color: var(--accent);
-  color: #fff;
+  color: var(--accent-on);
   border: none;
 }
 
 .config-actions .btn-teal:hover:not(:disabled) {
-  background-color: var(--accent-dk);
+  background-color: var(--accent);
 }
 
 .config-actions .btn-teal:disabled {
@@ -135,7 +135,7 @@
 
 .config-actions .btn-outline-accent {
   background: transparent;
-  color: var(--accent);
+  color: var(--accent-ink);
   border: 1.5px solid var(--accent);
 }
 
@@ -162,7 +162,7 @@
 
 .expiry-badge {
   background-color: rgba(231, 76, 60, 0.1);
-  color: var(--danger);
+  color: var(--danger-ink);
   padding: 6px 14px;
   border-radius: 20px;
   font-size: 0.78rem;
@@ -274,7 +274,7 @@
 
 .role-icon {
   font-size: 36px !important;
-  color: var(--accent);
+  color: var(--accent-ink);
   margin-bottom: 12px;
   display: block;
 }
@@ -313,7 +313,7 @@
 
 .security-item > .material-icons {
   font-size: 24px;
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 
 .security-label {
@@ -353,13 +353,13 @@
 
 .size-badge:hover {
   border-color: var(--accent);
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 
 .size-badge.active {
   background-color: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  color: var(--accent-on);
 }
 
 /* ============================

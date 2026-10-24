@@ -65,8 +65,34 @@ export class NuevaVentaComponent implements OnDestroy {
   clientNameSearch = '';
   clientModalSearch = '';
 
-  /** Porcentaje de descuento (se edita desde la plantilla). */
+  /** Porcentaje de descuento. Es la unica fuente de verdad del calculo. */
   readonly descuentoPct = signal(0);
+
+  /** Como se introduce el descuento: 'pct' (porcentaje) o 'monto' (pesos). */
+  readonly descuentoModo = signal<'pct' | 'monto'>('pct');
+
+  /** Texto en curso del campo, para no pelear con el usuario mientras escribe. */
+  readonly descuentoTexto = signal('0');
+
+  /** Presets de descuento rapido, en porcentaje. */
+  readonly descuentosRapidos = [0, 5, 10, 15, 20];
+
+  /** Medio de pago de la venta (efectivo por defecto). */
+  readonly medioPago = signal<'efectivo' | 'tarjeta' | 'transferencia' | 'credito'>('efectivo');
+
+  /** Plazo en dias de las ventas a credito. */
+  readonly plazoDias = signal(30);
+
+  /** Numero de la ultima venta registrada, para el aviso no bloqueante. */
+  readonly ventaReciente = signal<string | null>(null);
+
+  /** Medios de pago disponibles en el POS. */
+  readonly mediosPago = [
+    { valor: 'efectivo' as const, etiqueta: 'Efectivo', icono: 'payments' },
+    { valor: 'tarjeta' as const, etiqueta: 'Tarjeta', icono: 'credit_card' },
+    { valor: 'transferencia' as const, etiqueta: 'Transfer.', icono: 'account_balance' },
+    { valor: 'credito' as const, etiqueta: 'Credito', icono: 'schedule' },
+  ];
 
   // Formateador expuesto a la plantilla
   money = formatMoney;
@@ -172,6 +198,96 @@ export class NuevaVentaComponent implements OnDestroy {
     }
   }
 
+  /** Formatea un porcentaje con un decimal como maximo y coma decimal. */
+  formatearPct(pct: number): string {
+    return String(Number(Number(pct).toFixed(1))).replace('.', ',');
+  }
+
+  /** Texto de ayuda del bloque de descuento. */
+  get textoAyudaDescuento(): string {
+    if (this.cart().length === 0) return 'Agrega productos para aplicar un descuento';
+    if (this.descuentoModo() === 'monto') {
+      return `Equivale al ${this.formatearPct(this.descuentoPct())}% del subtotal`;
+    }
+    return 'Se aplica al subtotal, antes del IVA';
+  }
+
+  /** Aplica un porcentaje desde los botones rapidos. */
+  aplicarDescuentoRapido(pct: number): void {
+    this.descuentoModo.set('pct');
+    this.descuentoTexto.set(String(pct));
+    this.descuentoPct.set(pct);
+  }
+
+  /**
+   * Cambia entre porcentaje y pesos conservando el valor economico:
+   * al pasar a pesos se muestra el monto ya calculado y viceversa.
+   */
+  cambiarModoDescuento(modo: 'pct' | 'monto'): void {
+    if (modo === this.descuentoModo()) return;
+    this.descuentoModo.set(modo);
+    this.descuentoTexto.set(
+      modo === 'monto'
+        ? String(this.montoDescuento)
+        : String(Number(this.descuentoPct().toFixed(1)))
+    );
+  }
+
+  /**
+   * Actualiza el descuento desde el campo de texto.
+   * El texto se sanea y se limita en el mismo paso: asi el campo nunca muestra
+   * un valor distinto del que se esta aplicando (antes se podia escribir 150 y
+   * ver aplicado 100 sin que el campo lo dijera).
+   */
+  editarDescuento(evento: Event): void {
+    // Solo digitos y un separador decimal
+    let texto = (evento.target as HTMLInputElement).value.replace(',', '.').replace(/[^0-9.]/g, '');
+    const partes = texto.split('.');
+    if (partes.length > 2) texto = `${partes[0]}.${partes.slice(1).join('')}`;
+
+    const valor = this.parsearDescuento(texto);
+    let normalizado = texto;
+    let pct: number;
+
+    if (this.descuentoModo() === 'pct') {
+      // Porcentaje: maximo 100 y como mucho un decimal
+      if (partes[1] && partes[1].length > 1) {
+        normalizado = `${partes[0]}.${partes[1].slice(0, 1)}`;
+      }
+      if (valor > 100) normalizado = '100';
+      pct = this.limitar(this.parsearDescuento(normalizado), 0, 100);
+    } else {
+      // Pesos: entero y nunca mas que el subtotal
+      const maximo = Math.max(this.subtotal, 0);
+      normalizado = partes[0];
+      if (valor > maximo) normalizado = String(maximo);
+      const monto = this.limitar(this.parsearDescuento(normalizado), 0, maximo);
+      pct = this.subtotal > 0 ? (monto / this.subtotal) * 100 : 0;
+    }
+
+    this.descuentoTexto.set(normalizado);
+    this.descuentoPct.set(pct);
+  }
+
+  /** Quita el descuento. */
+  quitarDescuento(): void {
+    this.descuentoModo.set('pct');
+    this.descuentoTexto.set('0');
+    this.descuentoPct.set(0);
+  }
+
+  /** Convierte el texto del campo a numero, aceptando coma decimal. */
+  private parsearDescuento(texto: string): number {
+    const limpio = String(texto).replace(',', '.').replace(/[^0-9.]/g, '');
+    const valor = Number(limpio);
+    return Number.isFinite(valor) ? valor : 0;
+  }
+
+  /** Limita un numero a un rango cerrado. */
+  private limitar(valor: number, minimo: number, maximo: number): number {
+    return Math.min(Math.max(valor, minimo), maximo);
+  }
+
   /** Totales de la venta */
   get subtotal(): number {
     return this.cart().reduce((sum, item) => sum + item.precio * item.cantidad, 0);
@@ -258,9 +374,22 @@ export class NuevaVentaComponent implements OnDestroy {
 
   /** Limpia la venta actual (carrito, cliente y descuento). */
   nuevaVenta(): void {
+    this.ventaReciente.set(null);
     this.cart.set([]);
     this.cliente.set(null);
-    this.descuentoPct.set(0);
+    this.quitarDescuento();
+    this.medioPago.set('efectivo');
+    this.plazoDias.set(30);
+  }
+
+  /** Plazo en dias, acotado al rango que acepta la API (1-365). */
+  cambiarPlazo(valor: number): void {
+    this.plazoDias.set(this.limitar(Number(valor) || 1, 1, 365));
+  }
+
+  /** Ir al historial desde el aviso de venta registrada. */
+  verHistorial(): void {
+    this.router.navigate([ROUTES.FACTURACION]);
   }
 
   /**
@@ -298,7 +427,12 @@ export class NuevaVentaComponent implements OnDestroy {
           productoId: item.id,
           cantidad: item.cantidad,
         })),
-        descuento: this.descuentoPct() || 0,
+        // En modo pesos el porcentaje puede salir con muchos decimales;
+        // se envia con dos, que es lo que necesita el calculo del servidor.
+        descuento: Number((this.descuentoPct() || 0).toFixed(2)),
+        medioPago: this.medioPago(),
+        // El plazo solo aplica a las ventas a credito
+        plazoDias: this.medioPago() === 'credito' ? this.plazoDias() : 0,
       })
       .subscribe({
         next: (res) => {
@@ -306,13 +440,8 @@ export class NuevaVentaComponent implements OnDestroy {
           this.nuevaVenta();
           this.refrescarStock();
 
-          if (this.temporizadorAviso !== null) clearTimeout(this.temporizadorAviso);
-          this.temporizadorAviso = setTimeout(() => {
-            this.temporizadorAviso = null;
-            if (window.confirm('Venta registrada. Desea ver el historial de facturacion?')) {
-              this.router.navigate([ROUTES.FACTURACION]);
-            }
-          }, 500);
+          // Aviso no bloqueante: el historial queda a un clic, sin window.confirm
+          this.ventaReciente.set(res.factura.numero);
         },
         error: (err) => this.toast.mostrar(mensajeError(err), 'error'),
         complete: () => this.isFinalizing.set(false),

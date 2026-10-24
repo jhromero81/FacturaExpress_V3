@@ -197,6 +197,13 @@ function mapFacturaRow(row) {
     descuento: Number(row.descuento),
     total: Number(row.total),
     estado: row.estado,
+    medioPago: row.medio_pago || 'efectivo',
+    plazoDias: Number(row.plazo_dias ?? 0),
+    fechaVencimiento: row.fecha_vencimiento
+      ? row.fecha_vencimiento instanceof Date
+        ? row.fecha_vencimiento.toISOString().slice(0, 10)
+        : String(row.fecha_vencimiento).slice(0, 10)
+      : null,
     cufe: row.cufe || null,
     firmaEstado: row.firma_estado || 'pendiente',
     intentosDian: Number(row.intentos_dian || 0),

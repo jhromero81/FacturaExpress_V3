@@ -12,7 +12,7 @@
       />
     </div>
     <div class="toolbar-actions">
-      <select class="rol-filter" [(ngModel)]="rolFilter" name="rolFilter">
+      <select class="rol-filter" aria-label="Filtrar por rol" [(ngModel)]="rolFilter" name="rolFilter">
         <option value="">Todos los roles</option>
         @for (perfil of perfiles; track perfil.rol) {
           <option [value]="perfil.rol">{{ perfil.nombre }}</option>

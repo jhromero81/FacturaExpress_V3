@@ -19,26 +19,26 @@
     <!-- SECCION: DATOS DE LA EMPRESA -->
     @if (activeSection() === 'empresa') {
       <div class="config-section-card">
-        <h3 class="config-title">
+        <h2 class="config-title">
           <span class="material-icons">business</span>
           Datos de la Empresa
-        </h3>
+        </h2>
         <div class="config-form">
           <div class="form-group">
-            <label>NIT</label>
-            <input type="text" [(ngModel)]="empresa.nit" name="nit" />
+            <label for="config-nit">NIT</label>
+            <input id="config-nit" type="text" [(ngModel)]="empresa.nit" name="nit" />
           </div>
           <div class="form-group">
-            <label>Razon Social</label>
-            <input type="text" [(ngModel)]="empresa.razonSocial" name="razonSocial" />
+            <label for="config-razon-social">Razon Social</label>
+            <input id="config-razon-social" type="text" [(ngModel)]="empresa.razonSocial" name="razonSocial" />
           </div>
           <div class="form-group">
-            <label>Email de Facturacion</label>
-            <input type="email" [(ngModel)]="empresa.emailFacturacion" name="emailFacturacion" />
+            <label for="config-email-facturacion">Email de Facturacion</label>
+            <input id="config-email-facturacion" type="email" [(ngModel)]="empresa.emailFacturacion" name="emailFacturacion" />
           </div>
           <div class="form-group">
-            <label>Telefono</label>
-            <input type="tel" [(ngModel)]="empresa.telefono" name="telefono" />
+            <label for="config-telefono">Telefono</label>
+            <input id="config-telefono" type="tel" [(ngModel)]="empresa.telefono" name="telefono" />
           </div>
           <div class="config-actions">
             <button type="button" class="btn-teal" (click)="saveEmpresa()">Guardar Cambios</button>
@@ -50,10 +50,10 @@
     <!-- SECCION: CONFIGURACION FISCAL -->
     @if (activeSection() === 'fiscal') {
       <div class="config-section-card">
-        <h3 class="config-title">
+        <h2 class="config-title">
           <span class="material-icons">verified</span>
           Configuracion Fiscal (DIAN)
-        </h3>
+        </h2>
         <div class="config-form">
           <div class="form-group">
             <label>Numero de Resolucion DIAN</label>
@@ -93,10 +93,10 @@
     <!-- SECCION: PERFILES DE USUARIO -->
     @if (activeSection() === 'usuarios') {
       <div class="config-section-card">
-        <h3 class="config-title">
+        <h2 class="config-title">
           <span class="material-icons">admin_panel_settings</span>
           Perfiles de Usuario
-        </h3>
+        </h2>
         <div class="roles-grid">
           <div class="role-card">
             <span class="material-icons role-icon">admin_panel_settings</span>
@@ -133,10 +133,10 @@
     <!-- SECCION: NOTIFICACIONES -->
     @if (activeSection() === 'notificaciones') {
       <div class="config-section-card">
-        <h3 class="config-title">
+        <h2 class="config-title">
           <span class="material-icons">notifications</span>
           Notificaciones
-        </h3>
+        </h2>
         <div class="config-form">
           <div class="toggle-row">
             <div class="toggle-info">
@@ -194,10 +194,10 @@
     <!-- SECCION: SEGURIDAD -->
     @if (activeSection() === 'seguridad') {
       <div class="config-section-card">
-        <h3 class="config-title">
+        <h2 class="config-title">
           <span class="material-icons">shield</span>
           Seguridad
-        </h3>
+        </h2>
         <div class="config-form">
           <div class="security-info-grid">
             <div class="security-item">
@@ -248,10 +248,10 @@
     <!-- SECCION: ACCESIBILIDAD -->
     @if (activeSection() === 'accesibilidad') {
       <div class="config-section-card">
-        <h3 class="config-title">
+        <h2 class="config-title">
           <span class="material-icons">accessibility_new</span>
           Accesibilidad
-        </h3>
+        </h2>
         <div class="config-form">
           <div class="toggle-row">
             <div class="toggle-info">

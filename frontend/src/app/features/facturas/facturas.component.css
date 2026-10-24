@@ -37,13 +37,13 @@
 
 .facturacion-toolbar .btn-teal {
   background-color: var(--accent);
-  color: #fff;
+  color: var(--accent-on);
   border: none;
 }
 
 .facturacion-toolbar .btn-outline-accent {
   background: transparent;
-  color: var(--accent);
+  color: var(--accent-ink);
   border: 1.5px solid var(--accent);
 }
 
@@ -53,7 +53,7 @@
 
 .facturacion-toolbar .btn-teal:hover {
   transform: translateY(-1px);
-  background-color: var(--accent-dk);
+  background-color: var(--accent);
   box-shadow: 0 5px 14px rgba(26, 188, 156, 0.28);
 }
 
@@ -104,6 +104,11 @@
   margin-bottom: 16px;
 }
 
+/* El badge de estado no se estira con el ancho de la celda */
+.detail-meta .badge-status {
+  align-self: flex-start;
+}
+
 .detail-meta > div {
   display: flex;
   flex-direction: column;
@@ -142,7 +147,7 @@
 }
 
 .detail-totals .detail-discount {
-  color: var(--danger);
+  color: var(--danger-ink);
 }
 
 .detail-total {
@@ -151,7 +156,7 @@
   padding-top: 10px !important;
   font-weight: 700;
   font-size: 1rem !important;
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 
 /* ============================
@@ -179,4 +184,47 @@
   .filter-group {
     flex-wrap: wrap;
   }
+}
+
+/* ============================
+   ANULACION CON NOTA CREDITO
+   ============================ */
+
+/* Modal estrecho: solo pide el motivo */
+.modal-anular {
+  max-width: 460px;
+  width: 100%;
+}
+
+.modal-help {
+  font-size: 0.85rem;
+  color: var(--text-soft);
+  margin-bottom: 16px;
+}
+
+/* Aviso de la nota credito dentro del detalle de la factura */
+.nota-credito-info {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px 14px;
+  margin-top: 16px;
+  background-color: rgba(120, 144, 156, 0.12);
+  border-left: 3px solid var(--danger-ink);
+  border-radius: 6px;
+  font-size: 0.85rem;
+}
+
+.nota-credito-info .material-icons {
+  font-size: 18px;
+  color: var(--danger-ink);
+}
+
+.nota-credito-info p {
+  color: var(--text-dark);
+  margin: 0;
+}
+
+.nota-credito-info p + p {
+  margin-top: 6px;
 }

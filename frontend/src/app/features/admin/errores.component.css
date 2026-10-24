@@ -29,9 +29,9 @@
   font-size: 34px !important;
 }
 
-.kpi-card.total .material-icons { color: var(--warning); }
-.kpi-card.open .material-icons { color: var(--danger); }
-.kpi-card.resolved .material-icons { color: var(--success); }
+.kpi-card.total .material-icons { color: var(--warning-ink); }
+.kpi-card.open .material-icons { color: var(--danger-ink); }
+.kpi-card.resolved .material-icons { color: var(--success-ink); }
 
 .kpi-card > div {
   display: flex;
@@ -67,17 +67,17 @@
   font-size: 0.75rem;
   font-weight: 600;
   background-color: rgba(52, 152, 219, 0.12);
-  color: var(--info);
+  color: var(--info-ink);
 }
 
 .tipo-badge.dian {
   background-color: rgba(231, 76, 60, 0.12);
-  color: var(--danger);
+  color: var(--danger-ink);
 }
 
 .tipo-badge.correo {
   background-color: rgba(243, 156, 18, 0.12);
-  color: var(--warning);
+  color: var(--warning-ink);
 }
 
 .tipo-badge.bd {

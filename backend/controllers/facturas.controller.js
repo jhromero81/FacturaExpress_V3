@@ -32,11 +32,14 @@ const { registrarError } = require('../utils/errores');
 const pdfService = require('../services/pdf.service');
 const emailService = require('../services/email.service');
 
-/** Estados validos de una factura ante la DIAN */
-const ESTADOS_VALIDOS = ['pendiente', 'enviada', 'rechazada'];
+/** Estados validos de una factura ante la DIAN (anulada = nota credito emitida) */
+const ESTADOS_VALIDOS = ['pendiente', 'enviada', 'rechazada', 'anulada'];
 
 /** Estados de firma de la factura */
 const FIRMA_ESTADOS = ['pendiente', 'firmada', 'rechazada'];
+
+/** Medios de pago aceptados en una venta */
+const MEDIOS_PAGO = ['efectivo', 'tarjeta', 'transferencia', 'credito'];
 
 /** Tarifa de IVA general, usada solo si el producto no define una */
 const IVA_TARIFA = 0.19;
@@ -44,7 +47,8 @@ const IVA_TARIFA = 0.19;
 /** Columnas base de una factura (para los SELECT repetidos) */
 const CAMPOS_FACTURA = `f.id, f.numero, f.fecha, f.cliente_id, f.cliente_identificacion,
             f.cliente_nombre, f.subtotal, f.iva, f.descuento, f.total, f.estado, f.cufe,
-            f.firma_estado, f.intentos_dian, f.correo_enviado`;
+            f.firma_estado, f.intentos_dian, f.correo_enviado, f.medio_pago, f.plazo_dias,
+            f.fecha_vencimiento`;
 
 /**
  * GET /api/facturas
@@ -151,7 +155,7 @@ const getFactura = asyncHandler(async (req, res) => {
  *     correo y registra errores si falla.
  */
 const createFactura = asyncHandler(async (req, res) => {
-  const { clienteId, items = [], descuento = 0 } = req.body || {};
+  const { clienteId, items = [], descuento = 0, medioPago: medioCrudo, plazoDias: plazoCrudo } = req.body || {};
 
   // ---- Validacion de la peticion ----
   if (!isValidPositiveInt(clienteId)) {
@@ -164,6 +168,11 @@ const createFactura = asyncHandler(async (req, res) => {
   const descuentoValido = Number.isFinite(Number(descuento))
     ? Math.min(Math.max(Number(descuento), 0), 100)
     : 0;
+
+  // El medio de pago no afecta los calculos, pero si la fecha de vencimiento:
+  // solo las ventas a credito llevan plazo.
+  const medioPago = MEDIOS_PAGO.includes(medioCrudo) ? medioCrudo : 'efectivo';
+  const plazoDias = medioPago === 'credito' ? clampInt(plazoCrudo, 1, 365, 30) : 0;
 
   // ---- Verificar existencia del cliente ----
   const [clientes] = await pool.query(
@@ -273,22 +282,32 @@ const createFactura = asyncHandler(async (req, res) => {
       fecha: new Date(),
     });
 
+    // La fecha de vencimiento se calcula en SQL para usar la fecha del
+    // servidor de base de datos y no la del proceso Node (evita desfases).
+    const vencimientoSql = medioPago === 'credito' ? 'DATE_ADD(CURDATE(), INTERVAL ? DAY)' : 'NULL';
+    const parametrosFactura = [
+      numero,
+      cliente.id,
+      cliente.identificacion,
+      cliente.nombre,
+      subtotalTotal,
+      ivaTotal,
+      montoDescuento,
+      total,
+      cufe,
+      medioPago,
+      plazoDias,
+    ];
+    if (medioPago === 'credito') parametrosFactura.push(plazoDias);
+
     const [result] = await connection.query(
       `INSERT INTO facturas
         (numero, fecha, cliente_id, cliente_identificacion, cliente_nombre,
-         subtotal, iva, descuento, total, estado, cufe, firma_estado, intentos_dian, correo_enviado)
-       VALUES (?, NOW(), ?, ?, ?, ?, ?, ?, ?, 'pendiente', ?, 'pendiente', 0, 0)`,
-      [
-        numero,
-        cliente.id,
-        cliente.identificacion,
-        cliente.nombre,
-        subtotalTotal,
-        ivaTotal,
-        montoDescuento,
-        total,
-        cufe,
-      ]
+         subtotal, iva, descuento, total, estado, cufe, firma_estado, intentos_dian, correo_enviado,
+         medio_pago, plazo_dias, fecha_vencimiento)
+       VALUES (?, NOW(), ?, ?, ?, ?, ?, ?, ?, 'pendiente', ?, 'pendiente', 0, 0,
+               ?, ?, ${vencimientoSql})`,
+      parametrosFactura
     );
 
     facturaId = result.insertId;
@@ -436,6 +455,14 @@ const updateEstadoFactura = asyncHandler(async (req, res) => {
   if (!ESTADOS_VALIDOS.includes(estado)) {
     throw createHttpError(400, `Estado invalido. Valores permitidos: ${ESTADOS_VALIDOS.join(', ')}.`);
   }
+  // Anular exige nota credito: cambiar el estado a mano dejaria la factura
+  // anulada sin documento soporte ni restitucion de stock.
+  if (estado === 'anulada') {
+    throw createHttpError(
+      409,
+      'Para anular una factura emita una nota credito (POST /api/facturas/:id/nota-credito).'
+    );
+  }
 
   // Se leen TODAS las columnas que la actualizacion necesita. Antes solo
   // se traian id, numero y estado, de modo que firma_estado e intentos_dian
@@ -486,6 +513,131 @@ const updateEstadoFactura = asyncHandler(async (req, res) => {
     success: true,
     message: `Factura ${factura.numero} marcada como "${estado}".`,
     factura: mapFacturaRow(rows[0]),
+  });
+});
+
+/**
+ * POST /api/facturas/:id/nota-credito
+ * Anula una factura emitiendo una nota credito. La factura NO se borra:
+ * se marca como anulada, se guarda el motivo y se restituye el stock.
+ * Body: { motivo }.
+ */
+const anularFactura = asyncHandler(async (req, res) => {
+  const motivo = asString(req.body?.motivo).trim();
+  if (motivo.length < 5 || motivo.length > 200) {
+    throw createHttpError(400, 'El motivo debe tener entre 5 y 200 caracteres.');
+  }
+
+  const [facturas] = await pool.query(
+    `SELECT ${CAMPOS_FACTURA}
+       FROM facturas f WHERE f.id = ?`,
+    [req.params.id]
+  );
+  if (facturas.length === 0) {
+    throw createHttpError(404, 'Factura no encontrada.');
+  }
+
+  const factura = facturas[0];
+  if (factura.estado === 'anulada') {
+    throw createHttpError(409, 'La factura ya esta anulada.');
+  }
+
+  const numeroNota = `NC-${factura.numero}`;
+  const usuarioId = req.usuario?.id ?? null;
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    const [result] = await connection.query(
+      `INSERT INTO notas_credito
+        (numero, factura_id, motivo, subtotal, iva, total, usuario_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [numeroNota, factura.id, motivo, factura.subtotal, factura.iva, factura.total, usuarioId]
+    );
+
+    // La mercancia vuelve al inventario (la nota credito reversa la venta)
+    const [items] = await connection.query(
+      'SELECT producto_id, cantidad FROM factura_items WHERE factura_id = ?',
+      [factura.id]
+    );
+    for (const item of items) {
+      if (item.producto_id === null || item.producto_id === undefined) continue;
+      await connection.query(
+        'UPDATE productos SET stock = stock + ? WHERE id = ?',
+        [item.cantidad, item.producto_id]
+      );
+    }
+
+    await connection.query("UPDATE facturas SET estado = 'anulada' WHERE id = ?", [factura.id]);
+
+    await connection.commit();
+
+    await registrarAuditoria(req, `ANULACION factura ${factura.numero} (${numeroNota})`, 'facturas', factura.id);
+
+    const [rows] = await pool.query(
+      `SELECT ${CAMPOS_FACTURA}
+         FROM facturas f WHERE f.id = ?`,
+      [factura.id]
+    );
+
+    res.status(201).json({
+      success: true,
+      message: `Factura ${factura.numero} anulada con la nota credito ${numeroNota}.`,
+      nota: {
+        id: result.insertId,
+        numero: numeroNota,
+        fecha: new Date().toISOString(),
+        motivo,
+        subtotal: Number(factura.subtotal),
+        iva: Number(factura.iva),
+        total: Number(factura.total),
+      },
+      factura: rows.length > 0 ? mapFacturaRow(rows[0]) : mapFacturaRow({ ...factura, estado: 'anulada' }),
+    });
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+});
+
+/**
+ * GET /api/facturas/:id/notas-credito
+ * Lista las notas credito que anularon una factura.
+ */
+const listNotasCredito = asyncHandler(async (req, res) => {
+  const [facturas] = await pool.query(
+    `SELECT ${CAMPOS_FACTURA}
+       FROM facturas f WHERE f.id = ?`,
+    [req.params.id]
+  );
+  if (facturas.length === 0) {
+    throw createHttpError(404, 'Factura no encontrada.');
+  }
+
+  const [notas] = await pool.query(
+    `SELECT n.id, n.numero, n.motivo, n.subtotal, n.iva, n.total, n.created_at, u.nombre AS usuario
+       FROM notas_credito n
+       LEFT JOIN usuarios u ON u.id = n.usuario_id
+      WHERE n.factura_id = ?
+      ORDER BY n.id DESC`,
+    [req.params.id]
+  );
+
+  res.json({
+    success: true,
+    notas: notas.map((n) => ({
+      id: n.id,
+      numero: n.numero,
+      fecha: n.created_at instanceof Date ? n.created_at.toISOString() : n.created_at,
+      motivo: n.motivo,
+      subtotal: Number(n.subtotal),
+      iva: Number(n.iva),
+      total: Number(n.total),
+      usuario: n.usuario || null,
+    })),
   });
 });
 
@@ -698,6 +850,8 @@ module.exports = {
   getFactura,
   createFactura,
   updateEstadoFactura,
+  anularFactura,
+  listNotasCredito,
   deleteFactura,
   getFacturaPDF,
   getFacturaXML,

@@ -34,7 +34,7 @@ const { prefijoFacturaMes } = require('../../utils/helpers');
 // ============================================================
 // Traza y escenario en curso
 // ============================================================
-const traza = { sqls: [], commits: 0, rollbacks: 0, stock: [], auditorias: [] };
+const traza = { sqls: [], commits: 0, rollbacks: 0, stock: [], auditorias: [], notas: [] };
 let escenario = null;
 let secuenciaUsuarios = 0;
 
@@ -43,6 +43,7 @@ function prepararEscenario(opciones = {}) {
   traza.sqls.length = 0;
   traza.stock.length = 0;
   traza.auditorias.length = 0;
+  traza.notas.length = 0;
   traza.commits = 0;
   traza.rollbacks = 0;
 
@@ -108,6 +109,9 @@ function filaFactura() {
     total: p[7],
     estado: escenario.ultimoEstado || escenario.estadoFactura,
     cufe: p[8],
+    medio_pago: p[9] || 'efectivo',
+    plazo_dias: p[10] ?? 0,
+    fecha_vencimiento: null,
     firma_estado: escenario.ultimaFirma || escenario.firmaEstado,
     intentos_dian: escenario.ultimosIntentos ?? escenario.intentosDian,
     correo_enviado: 0,
@@ -166,6 +170,24 @@ function responder(sqlCrudo, params = []) {
   }
   if (sql.includes('FROM empresa')) return [[]];
 
+  // Notas credito (anulacion con documento soporte)
+  if (sql.includes('INSERT INTO notas_credito')) {
+    traza.notas.push(params);
+    return [{ insertId: 1, affectedRows: 1 }];
+  }
+  if (sql.includes('FROM notas_credito')) {
+    return [[{
+      id: 1,
+      numero: 'NC-FAC-202609-00005',
+      motivo: 'Devolucion completa',
+      subtotal: 25000,
+      iva: 4750,
+      total: 29750,
+      created_at: new Date('2026-09-21T10:00:00Z'),
+      usuario: 'Admin Demo',
+    }]];
+  }
+
   // Escrituras de la venta
   if (sql.includes('INSERT INTO facturas')) {
     escenario.insertFactura = params;
@@ -201,6 +223,10 @@ function responder(sqlCrudo, params = []) {
         : [],
     ];
   }
+  if (sql.startsWith("UPDATE facturas SET estado = 'anulada'")) {
+    escenario.ultimoEstado = 'anulada';
+    return [{ affectedRows: 1 }];
+  }
   if (sql.startsWith('UPDATE facturas SET estado')) {
     [escenario.ultimoEstado, escenario.ultimaFirma, escenario.ultimosIntentos] = params;
     escenario.firmaEstado = escenario.ultimaFirma;
@@ -212,7 +238,9 @@ function responder(sqlCrudo, params = []) {
   }
   if (sql.includes('FROM factura_items WHERE factura_id')) return [filasItems()];
   // mysql2 responde [rows, fields]: el controlador desestructura rows[0]
-  if (sql.includes('SELECT f.id, f.numero')) return [[filaFactura()]];
+  if (sql.includes('SELECT f.id, f.numero')) {
+    return escenario.facturaExiste ? [[filaFactura()]] : [[]];
+  }
 
   // Bitacoras: la auditoria se registra con el modulo real, sin efectos
   if (sql.includes('INSERT INTO logs_auditoria')) {
@@ -759,4 +787,135 @@ test('DELETE /api/facturas/:id rechaza eliminar una factura ya enviada a la DIAN
   assert.match(r.body.message, /enviada a la DIAN/i);
   assert.equal(traza.commits, 0);
   assert.equal(traza.stock.length, 0);
+});
+
+// ============================================================
+// 7. Anulacion con nota credito
+// ============================================================
+test('POST /api/facturas/:id/nota-credito anula la factura y restituye el stock', async () => {
+  prepararEscenario({ rol: 'admin', estadoFactura: 'enviada' });
+
+  const r = await peticion('POST', '/api/facturas/1/nota-credito', {
+    motivo: 'Devolucion completa de la mercancia',
+  });
+
+  assert.equal(r.status, 201, `sentencias: ${traza.sqls.join(' | ')}`);
+  assert.equal(escenario.ultimoEstado, 'anulada', 'la factura debe quedar anulada');
+  assert.equal(r.body.factura.estado, 'anulada');
+  assert.equal(traza.commits, 1);
+  assert.equal(traza.rollbacks, 0);
+  assert.deepEqual(traza.stock, [{ operacion: 'restituir', cantidad: 3, productoId: 1 }]);
+  assert.equal(traza.notas.length, 1, 'debe registrar la nota credito');
+  assert.equal(traza.notas[0][1], 7, 'la nota apunta a la factura');
+  assert.match(traza.notas[0][2], /Devolucion completa/);
+  assert.match(r.body.message, /nota credito/i);
+});
+
+test('POST /api/facturas/:id/nota-credito exige un motivo de al menos 5 caracteres', async () => {
+  prepararEscenario({ rol: 'admin' });
+
+  const r = await peticion('POST', '/api/facturas/1/nota-credito', { motivo: 'abc' });
+
+  assert.equal(r.status, 400);
+  assert.equal(traza.notas.length, 0);
+  assert.equal(traza.commits, 0);
+});
+
+test('POST /api/facturas/:id/nota-credito no permite anular dos veces', async () => {
+  prepararEscenario({ rol: 'admin', estadoFactura: 'anulada' });
+
+  const r = await peticion('POST', '/api/facturas/1/nota-credito', {
+    motivo: 'Segundo intento de anulacion',
+  });
+
+  assert.equal(r.status, 409);
+  assert.match(r.body.message, /ya esta anulada/i);
+  assert.equal(traza.notas.length, 0);
+});
+
+test('POST /api/facturas/:id/nota-credito restringe la anulacion a admin y contador', async () => {
+  prepararEscenario({ rol: 'vendedor' });
+
+  const r = await peticion('POST', '/api/facturas/1/nota-credito', {
+    motivo: 'El vendedor no puede anular',
+  });
+
+  assert.equal(r.status, 403);
+  assert.equal(traza.notas.length, 0);
+});
+
+test('GET /api/facturas/:id/notas-credito devuelve las notas de la factura', async () => {
+  prepararEscenario({ rol: 'contador', estadoFactura: 'anulada' });
+
+  const r = await peticion('GET', '/api/facturas/1/notas-credito');
+
+  assert.equal(r.status, 200, `sentencias: ${traza.sqls.join(' | ')}`);
+  assert.equal(r.body.notas.length, 1);
+  assert.equal(r.body.notas[0].numero, 'NC-FAC-202609-00005');
+  assert.equal(r.body.notas[0].total, 29750);
+});
+
+test('GET /api/facturas/:id/notas-credito responde 404 si la factura no existe', async () => {
+  prepararEscenario({ rol: 'admin', facturaExiste: false });
+
+  const r = await peticion('GET', '/api/facturas/99/notas-credito');
+
+  assert.equal(r.status, 404);
+});
+
+// ============================================================
+// 8. Medio de pago y plazo a credito
+// ============================================================
+test('POST /api/facturas guarda el medio de pago y el plazo a credito', async () => {
+  prepararEscenario({ rol: 'vendedor' });
+
+  const r = await peticion('POST', '/api/facturas', {
+    clienteId: 1,
+    items: [{ productoId: 1, cantidad: 2 }],
+    medioPago: 'credito',
+    plazoDias: 30,
+  });
+
+  assert.equal(r.status, 201, `sentencias: ${traza.sqls.join(' | ')}`);
+  assert.equal(r.body.factura.medioPago, 'credito');
+  assert.equal(r.body.factura.plazoDias, 30);
+  assert.equal(escenario.insertFactura[9], 'credito');
+  assert.equal(escenario.insertFactura[10], 30);
+  assert.equal(escenario.insertFactura[11], 30, 'el plazo se usa para el vencimiento');
+  assert.ok(
+    traza.sqls.some((s) => s.includes('fecha_vencimiento') && s.includes('DATE_ADD')),
+    'la venta a credito debe calcular la fecha de vencimiento'
+  );
+  assert.equal(traza.sqls.some((s) => s.includes('INSERT INTO notas_credito')), false);
+
+  await drenarPostVenta();
+});
+
+test('POST /api/facturas usa efectivo y plazo 0 si no se indica medio de pago', async () => {
+  prepararEscenario({ rol: 'vendedor' });
+
+  const r = await peticion('POST', '/api/facturas', {
+    clienteId: 1,
+    items: [{ productoId: 1, cantidad: 1 }],
+  });
+
+  assert.equal(r.status, 201);
+  assert.equal(r.body.factura.medioPago, 'efectivo');
+  assert.equal(r.body.factura.plazoDias, 0);
+  assert.equal(escenario.insertFactura.length, 11, 'sin credito no se envia plazo extra');
+
+  await drenarPostVenta();
+});
+
+test('POST /api/facturas rechaza un medio de pago desconocido', async () => {
+  prepararEscenario({ rol: 'vendedor' });
+
+  const r = await peticion('POST', '/api/facturas', {
+    clienteId: 1,
+    items: [{ productoId: 1, cantidad: 1 }],
+    medioPago: 'bitcoin',
+  });
+
+  assert.equal(r.status, 400);
+  assert.equal(escenario.insertFactura, null);
 });

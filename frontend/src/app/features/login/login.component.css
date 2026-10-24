@@ -68,7 +68,7 @@
   border-radius: 50%;
   border: none;
   background-color: rgba(26, 188, 156, 0.1);
-  color: var(--accent);
+  color: var(--accent-ink);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -100,7 +100,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #fff;
+  color: var(--accent-on);
   font-size: 1.8rem;
   font-weight: 800;
   font-family: var(--font-mono);
@@ -128,7 +128,7 @@
   border-radius: 20px;
   font-size: 0.72rem;
   font-weight: 600;
-  color: var(--success);
+  color: var(--success-ink);
   background-color: rgba(39, 174, 96, 0.1);
   letter-spacing: 0.3px;
 }
@@ -188,7 +188,7 @@
 }
 
 .password-toggle:hover {
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 
 .password-toggle .material-icons {
@@ -198,7 +198,7 @@
 /* Mensaje de error */
 .login-error {
   background-color: rgba(231, 76, 60, 0.1);
-  color: var(--danger);
+  color: var(--danger-ink);
   font-size: 0.85rem;
   padding: 10px 14px;
   border-radius: 8px;
@@ -209,7 +209,7 @@
 .login-btn {
   height: 48px;
   background-color: var(--accent);
-  color: #fff;
+  color: var(--accent-on);
   border: none;
   border-radius: 10px;
   font-size: 0.95rem;
@@ -221,7 +221,7 @@
 }
 
 .login-btn:hover:not(:disabled) {
-  background-color: var(--accent-dk);
+  background-color: var(--accent);
   transform: translateY(-1px);
 }
 
@@ -261,5 +261,5 @@
 }
 
 .login-links a:hover {
-  color: var(--accent);
+  color: var(--accent-ink);
 }

@@ -11,7 +11,7 @@
       />
     </div>
     <div class="filter-group">
-      <select class="filter-select" [(ngModel)]="tablaFilter" (ngModelChange)="loadLogs()" name="tablaFilter">
+      <select class="filter-select" aria-label="Filtrar por tabla" [(ngModel)]="tablaFilter" (ngModelChange)="loadLogs()" name="tablaFilter">
         <option value="">Todas las tablas</option>
         @for (t of tablas; track t) {
           <option [value]="t">{{ t }}</option>

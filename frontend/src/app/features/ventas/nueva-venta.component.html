@@ -129,6 +129,23 @@
       </div>
 
       <!-- Tabla de items en el carrito -->
+      <!-- Aviso de la venta recien registrada (sustituye al confirm) -->
+      @if (ventaReciente(); as numeroVenta) {
+        <div class="venta-reciente" role="status">
+          <span class="material-icons">check_circle</span>
+          <span>Venta <strong class="font-mono">{{ numeroVenta }}</strong> registrada.</span>
+          <button type="button" class="venta-reciente-link" (click)="verHistorial()">Ver historial</button>
+          <button
+            type="button"
+            class="venta-reciente-close"
+            (click)="ventaReciente.set(null)"
+            aria-label="Ocultar aviso"
+          >
+            <span class="material-icons">close</span>
+          </button>
+        </div>
+      }
+
       <div class="cart-table-container">
         <table class="data-table">
           <thead>
@@ -181,29 +198,88 @@
 
     <!-- Panel derecho: resumen de pago -->
     <div class="payment-panel">
-      <h3 class="payment-title">Resumen de Pago</h3>
+      <h2 class="payment-title">Resumen de Pago</h2>
 
       <div class="payment-rows">
         <div class="payment-row">
           <span>Subtotal</span>
           <span class="font-mono">{{ money(subtotal) }}</span>
         </div>
-        <div class="payment-row discount-input">
-          <label for="descuento-venta">Descuento (%)</label>
-          <input
-            id="descuento-venta"
-            type="number"
-            min="0"
-            max="100"
-            step="1"
-            [value]="descuentoPct()"
-            (input)="descuentoPct.set(Math.min(Math.max(+$any($event.target).value || 0, 0), 100))"
-            placeholder="0"
-          />
+        <!-- Descuento: presets, entrada en % o en pesos y equivalencia -->
+        <div class="discount-block">
+          <div class="discount-head">
+            <span class="discount-label" id="descuento-etiqueta">Descuento</span>
+            <div class="discount-modes" role="group" aria-label="Forma del descuento">
+              <button
+                type="button"
+                class="discount-mode"
+                [class.active]="descuentoModo() === 'pct'"
+                (click)="cambiarModoDescuento('pct')"
+                [attr.aria-pressed]="descuentoModo() === 'pct'"
+                title="Descuento en porcentaje"
+              >
+                %
+              </button>
+              <button
+                type="button"
+                class="discount-mode"
+                [class.active]="descuentoModo() === 'monto'"
+                (click)="cambiarModoDescuento('monto')"
+                [attr.aria-pressed]="descuentoModo() === 'monto'"
+                title="Descuento en pesos"
+              >
+                $
+              </button>
+            </div>
+          </div>
+
+          <div class="discount-chips" role="group" aria-label="Descuentos rapidos">
+            @for (pct of descuentosRapidos; track pct) {
+              <button
+                type="button"
+                class="discount-chip"
+                [class.active]="descuentoModo() === 'pct' && descuentoPct() === pct"
+                (click)="aplicarDescuentoRapido(pct)"
+                [attr.aria-pressed]="descuentoModo() === 'pct' && descuentoPct() === pct"
+              >
+                {{ pct }}%
+              </button>
+            }
+          </div>
+
+          <div class="discount-field">
+            <input
+              id="descuento-venta"
+              type="text"
+              inputmode="decimal"
+              autocomplete="off"
+              [value]="descuentoTexto()"
+              (input)="editarDescuento($event)"
+              (focus)="$any($event.target).select()"
+              [disabled]="cart().length === 0"
+              aria-describedby="descuento-ayuda"
+              placeholder="0"
+            />
+            <span class="discount-unit">{{ descuentoModo() === 'pct' ? '%' : 'COP' }}</span>
+            @if (descuentoPct() > 0) {
+              <button
+                type="button"
+                class="discount-clear"
+                (click)="quitarDescuento()"
+                title="Quitar descuento"
+                aria-label="Quitar descuento"
+              >
+                <span class="material-icons">close</span>
+              </button>
+            }
+          </div>
+
+          <p class="discount-help" id="descuento-ayuda">{{ textoAyudaDescuento }}</p>
         </div>
+
         @if (montoDescuento > 0) {
           <div class="payment-row discount">
-            <span>Descuento ({{ descuentoPct() }}%)</span>
+            <span>Descuento ({{ formatearPct(descuentoPct()) }}%)</span>
             <span class="font-mono">-{{ money(montoDescuento) }}</span>
           </div>
         }
@@ -211,6 +287,40 @@
           <span>IVA{{ tarifasIva ? ' (' + tarifasIva + ')' : '' }}</span>
           <span class="font-mono">{{ money(iva) }}</span>
         </div>
+      </div>
+
+      <!-- Medio de pago: queda registrado en la factura -->
+      <div class="payment-methods-block">
+        <span class="payment-methods-label" id="medio-pago-etiqueta">Medio de pago</span>
+        <div class="payment-methods" role="group" aria-labelledby="medio-pago-etiqueta">
+          @for (medio of mediosPago; track medio.valor) {
+            <button
+              type="button"
+              class="payment-method"
+              [class.active]="medioPago() === medio.valor"
+              [attr.aria-pressed]="medioPago() === medio.valor"
+              (click)="medioPago.set(medio.valor)"
+            >
+              <span class="material-icons">{{ medio.icono }}</span>
+              <span>{{ medio.etiqueta }}</span>
+            </button>
+          }
+        </div>
+        @if (medioPago() === 'credito') {
+          <div class="payment-term">
+            <label for="plazo-dias">Plazo</label>
+            <input
+              id="plazo-dias"
+              type="number"
+              min="1"
+              max="365"
+              inputmode="numeric"
+              [value]="plazoDias()"
+              (input)="cambiarPlazo(+$any($event.target).value)"
+            />
+            <span>dias</span>
+          </div>
+        }
       </div>
 
       <div class="payment-divider"></div>
@@ -224,7 +334,7 @@
         {{ isFinalizing() ? 'PROCESANDO...' : 'FINALIZAR VENTA' }}
       </button>
 
-      <p class="payment-note">Genera XML y PDF automaticamente</p>
+      <p class="payment-note">Comprobante interno de demostracion (sin validez DIAN)</p>
     </div>
   </div>
 

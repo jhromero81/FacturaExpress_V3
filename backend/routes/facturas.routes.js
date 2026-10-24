@@ -9,6 +9,8 @@ const {
   getFactura,
   createFactura,
   updateEstadoFactura,
+  anularFactura,
+  listNotasCredito,
   deleteFactura,
   getFacturaPDF,
   getFacturaXML,
@@ -19,6 +21,7 @@ const { validate } = require('../middleware/validate');
 const {
   createFacturaValidator,
   updateEstadoFacturaValidator,
+  notaCreditoValidator,
   idValidator,
 } = require('../validators');
 
@@ -38,7 +41,16 @@ router.get('/:id', idValidator, validate, getFactura);
 router.get('/:id/pdf', idValidator, validate, getFacturaPDF);
 router.get('/:id/xml', idValidator, validate, getFacturaXML);
 router.get('/:id/csv', idValidator, validate, getFacturaCSV);
+router.get('/:id/notas-credito', idValidator, validate, listNotasCredito);
 router.put('/:id/estado', authorize('admin', 'contador'), updateEstadoFacturaValidator, validate, updateEstadoFactura);
+// La anulacion con nota credito es una funcion contable (admin/contador)
+router.post(
+  '/:id/nota-credito',
+  authorize('admin', 'contador'),
+  notaCreditoValidator,
+  validate,
+  anularFactura
+);
 router.delete('/:id', authorize('admin'), idValidator, validate, deleteFactura);
 
 module.exports = router;

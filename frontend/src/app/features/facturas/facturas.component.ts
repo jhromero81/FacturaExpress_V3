@@ -2,7 +2,7 @@
  * features/facturas/facturas.component.ts
  * Historial de facturas electronicas: busqueda, filtro por estado
  * DIAN, paginacion, exportacion CSV, descarga de documentos
- * (PDF/XML), cambio de estado y eliminacion de facturas pendientes.
+ * (PDF/XML), cambio de estado y anulacion con nota credito.
  */
 
 import { Component, inject, signal } from '@angular/core';
@@ -35,6 +35,26 @@ function estadoLabel(estado: string): string {
   return estado ? estado.charAt(0).toUpperCase() + estado.slice(1) : '';
 }
 
+/** Etiqueta legible del medio de pago */
+const MEDIO_PAGO_LABEL: Record<string, string> = {
+  efectivo: 'Efectivo',
+  tarjeta: 'Tarjeta',
+  transferencia: 'Transferencia',
+  credito: 'Credito',
+};
+
+/** Nota credito que anula una factura */
+interface NotaCredito {
+  id: number;
+  numero: string;
+  fecha: string;
+  motivo: string;
+  subtotal: number;
+  iva: number;
+  total: number;
+  usuario?: string;
+}
+
 @Component({
   selector: 'app-facturas',
   standalone: true,
@@ -53,7 +73,7 @@ export class FacturasComponent {
 
   /** Filtro de estado DIAN activo (lo actualiza la plantilla) */
   statusFilter = 'todos';
-  filtros = ['todos', 'pendiente', 'enviada', 'rechazada'];
+  filtros = ['todos', 'pendiente', 'enviada', 'rechazada', 'anulada'];
 
   /**
    * Estado de la vista como senales. Angular marca la vista por si mismo
@@ -66,6 +86,14 @@ export class FacturasComponent {
   readonly loading = signal(true);
   readonly selected = signal<Factura | null>(null);
   readonly detailLoading = signal(false);
+
+  /** Factura que se va a anular y motivo escrito por el usuario */
+  readonly facturaAAnular = signal<Factura | null>(null);
+  readonly motivoAnulacion = signal('');
+  readonly anulando = signal(false);
+
+  /** Notas credito de la factura abierta en el detalle */
+  readonly notas = signal<NotaCredito[]>([]);
 
   /** Paginacion resuelta por el servidor */
   readonly total = signal(0);
@@ -145,9 +173,15 @@ export class FacturasComponent {
     return estadoLabel(estado);
   }
 
+  /** Etiqueta legible del medio de pago de una factura */
+  medioPagoLabel(medio?: string): string {
+    return MEDIO_PAGO_LABEL[medio || 'efectivo'] || 'Efectivo';
+  }
+
   /** Abre el modal de detalle cargando la factura completa. */
   openDetail(factura: Factura): void {
     this.selected.set(factura);
+    this.notas.set([]);
     this.detailLoading.set(true);
     const solicitud = ++this.detalleSolicitado;
 
@@ -158,6 +192,19 @@ export class FacturasComponent {
           if (solicitud !== this.detalleSolicitado) return; // respuesta obsoleta
           this.selected.set(res.factura);
           this.detailLoading.set(false);
+
+          // Si esta anulada, se muestra la nota credito que la anulo
+          if (res.factura.estado === 'anulada') {
+            this.api
+              .get<{ success: boolean; notas: NotaCredito[] }>(`/facturas/${factura.id}/notas-credito`)
+              .subscribe({
+                next: (resNotas) => {
+                  if (solicitud !== this.detalleSolicitado) return;
+                  this.notas.set(resNotas.notas ?? []);
+                },
+                error: () => this.notas.set([]),
+              });
+          }
         },
         error: (err) => {
           if (solicitud !== this.detalleSolicitado) return;
@@ -204,19 +251,54 @@ export class FacturasComponent {
       });
   }
 
-  /** Elimina una factura no enviada (con confirmacion). */
-  handleDelete(factura: Factura): void {
-    if (!window.confirm(`Desea eliminar la factura ${factura.numero}?\nEsta accion no se puede deshacer.`)) {
+  /** Abre el modal de anulacion con el motivo vacio. */
+  abrirAnular(factura: Factura): void {
+    this.motivoAnulacion.set('');
+    this.facturaAAnular.set(factura);
+  }
+
+  /** Cierra el modal de anulacion sin tocar la factura. */
+  cerrarAnular(): void {
+    this.facturaAAnular.set(null);
+    this.motivoAnulacion.set('');
+  }
+
+  /**
+   * Anula una factura emitiendo una nota credito.
+   *
+   * No se borra nada: el servidor marca la factura como anulada, guarda el
+   * motivo en la nota y devuelve el stock al inventario. Borrar la factura
+   * hacia retroceder el consecutivo y chocaba con el numero unico.
+   */
+  confirmarAnulacion(): void {
+    const factura = this.facturaAAnular();
+    if (!factura) return;
+
+    const motivo = this.motivoAnulacion().trim();
+    if (motivo.length < 5) {
+      this.toast.mostrar('Indique el motivo de la anulacion (minimo 5 caracteres).', 'error');
       return;
     }
-    this.api.delete<{ success: boolean; message: string }>(`/facturas/${factura.id}`).subscribe({
-      next: (res) => {
-        this.toast.mostrar(res.message || 'Factura eliminada', 'success');
-        if (this.selected()?.id === factura.id) this.selected.set(null);
-        this.cargar();
-      },
-      error: (err) => this.toast.mostrar(mensajeError(err), 'error'),
-    });
+
+    this.anulando.set(true);
+    this.api
+      .post<{ success: boolean; message: string; factura: Factura }>(
+        `/facturas/${factura.id}/nota-credito`,
+        { motivo }
+      )
+      .subscribe({
+        next: (res) => {
+          this.anulando.set(false);
+          this.toast.mostrar(res.message || 'Factura anulada', 'success');
+          this.cerrarAnular();
+          this.closeDetail();
+          this.cargar();
+        },
+        error: (err) => {
+          this.anulando.set(false);
+          this.toast.mostrar(mensajeError(err), 'error');
+        },
+      });
   }
 
   /**

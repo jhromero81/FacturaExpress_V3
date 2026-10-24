@@ -35,8 +35,15 @@
   <div class="dashboard-content">
     <!-- Grafico de ventas semanales -->
     <div class="content-card chart-card">
-      <h3 class="card-title">Ventas de la Semana</h3>
+      <h2 class="card-title">Ventas de la Semana</h2>
       <div class="chart-container" #chartRef>
+        <!-- Sin ventas en la semana el grafico quedaria como ejes sueltos -->
+        @if (maxChartValue === 0) {
+          <div class="chart-empty">
+            <span class="material-icons">insights</span>
+            <p>Sin ventas registradas esta semana</p>
+          </div>
+        }
         <svg viewBox="0 0 600 250" class="weekly-chart" (mouseleave)="cerrarTooltip()">
           <defs>
             <linearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
@@ -127,7 +134,7 @@
     <div class="dashboard-side">
       <!-- Lista de ultimas transacciones -->
       <div class="content-card transactions-card">
-        <h3 class="card-title">Ultimas Transacciones</h3>
+        <h2 class="card-title">Ultimas Transacciones</h2>
         <div class="transactions-list">
           @if (transacciones().length === 0) {
             <div class="empty-state">
@@ -151,7 +158,7 @@
 
       <!-- Productos mas vendidos -->
       <div class="content-card products-card">
-        <h3 class="card-title">Productos Mas Vendidos</h3>
+        <h2 class="card-title">Productos Mas Vendidos</h2>
         <div class="top-products">
           @if (topProducts().length === 0) {
             <div class="empty-state">

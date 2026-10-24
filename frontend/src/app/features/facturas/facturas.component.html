@@ -101,9 +101,9 @@
                       <span class="material-icons">swap_horiz</span>
                     </button>
                   }
-                  @if (factura.estado !== 'enviada') {
-                    <button type="button" class="doc-btn del" (click)="handleDelete(factura)" title="Eliminar factura">
-                      <span class="material-icons">delete</span>
+                  @if (factura.estado !== 'anulada') {
+                    <button type="button" class="doc-btn del" (click)="abrirAnular(factura)" title="Anular con nota credito">
+                      <span class="material-icons">undo</span>
                     </button>
                   }
                 </div>
@@ -158,16 +158,17 @@
                 <span class="badge-status {{ sel.estado }}">{{ label(sel.estado) }}</span>
               </div>
               <div>
-                <span class="detail-label">Firma</span>
-                <span class="badge-status {{ sel.firmaEstado === 'firmada' ? 'enviada' : sel.firmaEstado }}">
-                  {{ sel.firmaEstado }}
+                <span class="detail-label">Medio de pago</span>
+                <span>
+                  {{ medioPagoLabel(sel.medioPago) }}{{ sel.medioPago === 'credito' && sel.plazoDias
+                    ? ' (' + sel.plazoDias + ' dias)' : '' }}
                 </span>
               </div>
             </div>
 
             <div class="detail-meta">
               <div>
-                <span class="detail-label">Intentos DIAN</span>
+                <span class="detail-label">Envio simulado</span>
                 <span class="font-mono">{{ sel.intentosDian }}</span>
               </div>
               <div>
@@ -175,7 +176,7 @@
                 <span>{{ sel.correoEnviado ? 'Si' : 'No' }}</span>
               </div>
               <div>
-                <span class="detail-label">CUFE</span>
+                <span class="detail-label">Referencia interna</span>
                 <span class="font-mono cune-text" [title]="sel.cufe || ''">
                   {{ sel.cufe ? sel.cufe.slice(0, 24) + '...' : 'Pendiente' }}
                 </span>
@@ -202,6 +203,20 @@
                 }
               </tbody>
             </table>
+
+            @if (notas().length > 0) {
+              <div class="nota-credito-info">
+                <span class="material-icons">undo</span>
+                <div>
+                  @for (nota of notas(); track nota.id) {
+                    <p>
+                      Anulada con la nota credito <strong class="font-mono">{{ nota.numero }}</strong>
+                      &mdash; {{ nota.motivo }}
+                    </p>
+                  }
+                </div>
+              </div>
+            }
 
             <div class="detail-totals">
               <div><span>Subtotal</span><span class="font-mono">{{ money(sel.subtotal) }}</span></div>
@@ -234,6 +249,52 @@
           <button type="button" class="btn-cancel-compact" (click)="closeDetail()">Cerrar</button>
         </div>
       </div>
+    </div>
+  }
+
+  <!-- Anulacion con nota credito: la factura no se borra -->
+  @if (facturaAAnular(); as facturaAnular) {
+    <div class="modal-overlay open" (click)="cerrarAnular()">
+      <!-- (submit) con preventDefault: el componente no importa FormsModule -->
+      <form
+        class="modal-content modal-anular"
+        (click)="$event.stopPropagation()"
+        (submit)="confirmarAnulacion(); $event.preventDefault()"
+      >
+        <div class="modal-header">
+          <h3>Anular factura {{ facturaAnular.numero }}</h3>
+        </div>
+        <div class="modal-body">
+          <p class="modal-help">
+            La factura no se elimina: se emite una nota credito, el stock vuelve al
+            inventario y el documento queda marcado como anulado.
+          </p>
+          <div class="form-group">
+            <label for="motivo-anulacion">Motivo de la anulacion</label>
+            <textarea
+              id="motivo-anulacion"
+              name="motivo"
+              rows="3"
+              maxlength="200"
+              required
+              [value]="motivoAnulacion()"
+              (input)="motivoAnulacion.set($any($event.target).value)"
+              placeholder="Ej: el cliente devolvio la mercancia"
+            ></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-cancel-compact" (click)="cerrarAnular()">Cancelar</button>
+          <button
+            type="submit"
+            class="btn-teal"
+            [disabled]="anulando() || motivoAnulacion().trim().length < 5"
+          >
+            <span class="material-icons">undo</span>
+            {{ anulando() ? 'Anulando...' : 'Emitir nota credito' }}
+          </button>
+        </div>
+      </form>
     </div>
   }
 </div>

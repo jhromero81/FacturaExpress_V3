@@ -348,6 +348,65 @@ async function migrarV3(connection) {
 }
 
 /**
+ * Version 4: medio de pago, plazo y vencimiento en facturas, estado
+ * anulada y tabla notas_credito (anulacion sin borrar la factura).
+ */
+async function migrarV4(connection) {
+  if (await existeTabla(connection, 'facturas')) {
+    const columnas = [
+      ['medio_pago', "ENUM('efectivo','tarjeta','transferencia','credito') NOT NULL DEFAULT 'efectivo'"],
+      ['plazo_dias', 'INT UNSIGNED NOT NULL DEFAULT 0'],
+      ['fecha_vencimiento', 'DATE NULL'],
+    ];
+    for (const [columna, definicion] of columnas) {
+      if (!(await existeColumna(connection, 'facturas', columna))) {
+        await connection.query(`ALTER TABLE facturas ADD COLUMN ${columna} ${definicion}`);
+        console.log(`[migrate] Columna facturas.${columna} agregada.`);
+      }
+    }
+
+    // El ENUM de estado necesita el valor 'anulada' para la nota credito
+    const tipo = await tipoColumna(connection, 'facturas', 'estado');
+    if (tipo.startsWith('enum') && !tipo.includes('anulada')) {
+      await connection.query(
+        `ALTER TABLE facturas
+           MODIFY COLUMN estado ENUM('pendiente','enviada','rechazada','anulada')
+           NOT NULL DEFAULT 'pendiente'`
+      );
+      console.log('[migrate] ENUM de estado ampliado con anulada.');
+    }
+  }
+
+  if (!(await existeTabla(connection, 'notas_credito'))) {
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS notas_credito (
+        id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        numero      VARCHAR(40)   NOT NULL UNIQUE,
+        factura_id  INT UNSIGNED  NOT NULL,
+        motivo      VARCHAR(200)  NOT NULL,
+        subtotal    DECIMAL(14,2) NOT NULL,
+        iva         DECIMAL(14,2) NOT NULL,
+        total       DECIMAL(14,2) NOT NULL,
+        usuario_id  INT UNSIGNED  NULL,
+        created_at  TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT fk_notas_factura
+          FOREIGN KEY (factura_id) REFERENCES facturas (id) ON DELETE CASCADE,
+        CONSTRAINT fk_notas_usuario
+          FOREIGN KEY (usuario_id) REFERENCES usuarios (id) ON DELETE SET NULL
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`);
+    console.log('[migrate] Tabla notas_credito creada.');
+  }
+
+  if (
+    (await existeTabla(connection, 'notas_credito')) &&
+    !(await existeIndice(connection, 'notas_credito', 'idx_notas_factura'))
+  ) {
+    await connection.query('CREATE INDEX idx_notas_factura ON notas_credito (factura_id)');
+    console.log('[migrate] Indice idx_notas_factura creado.');
+  }
+}
+
+/**
  * Aplica la migracion de forma idempotente.
  */
 async function main() {
@@ -358,6 +417,7 @@ async function main() {
     await migrarV2(connection);
     await tablasV2(connection);
     await migrarV3(connection);
+    await migrarV4(connection);
 
     console.log('[migrate] Migracion completada con exito.');
   } catch (error) {

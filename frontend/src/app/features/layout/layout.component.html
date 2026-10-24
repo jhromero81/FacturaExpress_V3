@@ -57,10 +57,13 @@
     <header class="topbar">
       <h1 class="topbar-title font-mono">FacturaExpress</h1>
 
-      <!-- Indicador de estado DIAN -->
-      <div class="topbar-dian">
+      <!-- Indicador del modo de operacion: no hay integracion real con la DIAN -->
+      <div
+        class="topbar-dian"
+        title="Los comprobantes son de demostracion: no se envian a la DIAN"
+      >
         <span class="pulse-dot"></span>
-        <span class="dian-text">DIAN SINCRONIZADO</span>
+        <span class="dian-text">MODO DEMOSTRACION</span>
       </div>
 
       <!-- Controles de accesibilidad e informacion de usuario -->
@@ -69,7 +72,12 @@
           type="button"
           class="topbar-icon-btn"
           (click)="auth.alternarModoOscuro()"
-          [title]="auth.preferencias().modoOscuro ? 'Desactivar modo oscuro' : 'Activar modo oscuro'"
+          [attr.aria-pressed]="auth.preferencias().modoOscuro"
+          [title]="
+            auth.preferencias().modoOscuro
+              ? 'Desactivar modo oscuro'
+              : 'Activar modo oscuro (desactiva el alto contraste)'
+          "
         >
           <span class="material-icons">{{ auth.preferencias().modoOscuro ? 'light_mode' : 'dark_mode' }}</span>
         </button>
@@ -78,7 +86,12 @@
           type="button"
           class="topbar-icon-btn"
           (click)="auth.alternarAltoContraste()"
-          [title]="auth.preferencias().altoContraste ? 'Desactivar alto contraste' : 'Activar alto contraste'"
+          [attr.aria-pressed]="auth.preferencias().altoContraste"
+          [title]="
+            auth.preferencias().altoContraste
+              ? 'Desactivar alto contraste'
+              : 'Activar alto contraste (desactiva el modo oscuro)'
+          "
         >
           <span class="material-icons">contrast</span>
         </button>
@@ -105,8 +118,8 @@
 
       <div class="footer-right">
         <div class="footer-status">
-          <span class="pulse-dot"></span>
-          <span>MOTOR FISCAL ACTIVO</span>
+          <span class="pulse-dot muted"></span>
+          <span>SIN MOTOR FISCAL</span>
         </div>
         <div class="footer-status">
           <span class="pulse-dot"></span>

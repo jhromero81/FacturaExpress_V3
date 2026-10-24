@@ -63,7 +63,13 @@ export interface Factura {
   iva: number;
   descuento: number;
   total: number;
-  estado: 'pendiente' | 'enviada' | 'rechazada';
+  estado: 'pendiente' | 'enviada' | 'rechazada' | 'anulada';
+  /** Medio de pago con el que se cerro la venta */
+  medioPago?: 'efectivo' | 'tarjeta' | 'transferencia' | 'credito';
+  /** Dias de plazo en las ventas a credito */
+  plazoDias?: number | null;
+  /** Fecha en que vence la factura a credito (YYYY-MM-DD) */
+  fechaVencimiento?: string | null;
   cufe: string | null;
   firmaEstado: string;
   intentosDian: number;

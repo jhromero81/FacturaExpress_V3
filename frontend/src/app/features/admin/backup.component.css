@@ -9,11 +9,11 @@
   align-items: center;
   justify-content: space-between;
   gap: 20px;
-  background: linear-gradient(135deg, var(--accent) 0%, #16a085 100%);
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dk) 100%);
   border-radius: 12px;
   padding: 24px 28px;
   margin-bottom: 24px;
-  color: #fff;
+  color: var(--accent-on);
 }
 
 .backup-hero-info {
@@ -35,13 +35,18 @@
 
 .backup-hero p {
   font-size: 0.85rem;
-  opacity: 0.85;
+  /* El hero tiene fondo teal: el parrafo hereda su tinta (--accent-on),
+     no el gris de la pagina, que sobre teal queda en 1:1 */
+  color: inherit;
   max-width: 520px;
 }
 
 .backup-hero .btn-teal {
-  background-color: #0f1923;
-  color: #fff;
+  /* Boton oscuro sobre el hero teal: usa los tokens del sidebar para que la
+     tinta siga siendo legible en los tres temas (en alto contraste el texto
+     negro del boton teal desaparecia sobre este fondo) */
+  background-color: var(--sidebar-bg);
+  color: var(--sidebar-text);
   border: none;
   border-radius: 8px;
   height: 44px;
@@ -96,17 +101,17 @@
 
 .action-btn:hover:not(:disabled) {
   border-color: var(--accent);
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 
 .action-btn.restore:hover:not(:disabled) {
   border-color: var(--info);
-  color: var(--info);
+  color: var(--info-ink);
 }
 
 .action-btn.danger:hover:not(:disabled) {
   border-color: var(--danger);
-  color: var(--danger);
+  color: var(--danger-ink);
 }
 
 .action-btn:disabled {

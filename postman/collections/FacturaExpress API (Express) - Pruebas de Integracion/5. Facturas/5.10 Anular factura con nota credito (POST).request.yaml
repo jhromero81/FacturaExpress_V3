@@ -1,0 +1,26 @@
+$kind: http-request
+url: "{{baseUrl}}/facturas/{{facturaId}}/nota-credito"
+method: POST
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{token}}
+body:
+  type: json
+  content: |-
+    {
+      "motivo": "Devolucion completa de la mercancia"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Nota credito emitida (HTTP 201)', function () {
+          pm.response.to.have.status(201);
+      });
+      const json = pm.response.json();
+      pm.test('La factura queda anulada sin borrarse', function () {
+          pm.expect(json.factura.estado).to.eql('anulada');
+          pm.expect(json.nota.numero).to.match(/^NC-/);
+          pm.expect(json.nota.motivo).to.contain('Devolucion');
+      });
+    language: text/javascript
+order: 4010

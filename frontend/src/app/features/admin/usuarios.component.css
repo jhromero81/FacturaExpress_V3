@@ -19,7 +19,7 @@
   gap: 8px;
   white-space: nowrap;
   background-color: var(--accent);
-  color: #fff;
+  color: var(--accent-on);
   border: none;
   border-radius: 8px;
   padding: 0 18px;
@@ -32,7 +32,7 @@
 }
 
 .usuarios-toolbar .btn-teal:hover {
-  background-color: var(--accent-dk);
+  background-color: var(--accent);
 }
 
 .usuarios-toolbar .btn-teal .material-icons {
@@ -62,7 +62,7 @@
 }
 
 .user-icon {
-  color: var(--accent);
+  color: var(--accent-ink);
   font-size: 20px !important;
 }
 
@@ -73,17 +73,17 @@
   font-size: 0.75rem;
   font-weight: 600;
   background-color: rgba(26, 188, 156, 0.12);
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 
 .rol-badge.admin {
   background-color: rgba(231, 76, 60, 0.12);
-  color: var(--danger);
+  color: var(--danger-ink);
 }
 
 .rol-badge.contador {
   background-color: rgba(52, 152, 219, 0.12);
-  color: var(--info);
+  color: var(--info-ink);
 }
 
 @media (max-width: 768px) {
