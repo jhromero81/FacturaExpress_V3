@@ -28,7 +28,7 @@ colombianas (punto de venta, facturación con flujo DIAN, reportes y administrac
 | Correo                 | nodemailer (envío de facturas por email) |
 | Variables de entorno   | dotenv                                   |
 | CORS                   | cors (origen del frontend configurable)  |
-| Pruebas                | node --test (138 pruebas en 11 archivos) |
+| Pruebas                | node --test (147 pruebas en 11 archivos) |
 | Control de versiones   | Git + GitHub                             |
 
 ### Frontend (aplicación web)
@@ -90,7 +90,7 @@ FacturaExpress_V3/
 │   │   ├── schema.sql             # Creacion de BD y 12 tablas
 │   │   └── seedData.js            # Datos iniciales para el seed
 │   ├── scripts/                   # setupDb.js, migrate.js, seed.js, pruebas-aceptacion.js
-│   └── test/                      # 11 suites: 138 pruebas (74 unitarias + 64 de integracion)
+│   └── test/                      # 11 suites: 147 pruebas (74 unitarias + 73 de integracion)
 ├── frontend/                      # Aplicación web Angular 22
 │   ├── proxy.conf.json            # /api → http://localhost:4000
 │   ├── angular.json               # Configuración del workspace
@@ -894,7 +894,7 @@ curl -s http://localhost:4000/api/reportes/kpis -H "Authorization: Bearer $TOKEN
 
 ## 9. Pruebas de software
 
-Conteo real medido ejecutando las suites: **138 pruebas del backend**, **37 del
+Conteo real medido ejecutando las suites: **147 pruebas del backend**, **37 del
 frontend** y **21 casos de aceptación E2E**.
 
 ### 9.1 Unitarias e integración del backend (node --test)
@@ -903,7 +903,7 @@ frontend** y **21 casos de aceptación E2E**.
 npm test --prefix backend
 ```
 
-**138 pruebas en 11 archivos** (74 unitarias + 64 de integración):
+**147 pruebas en 11 archivos** (74 unitarias + 73 de integración):
 
 | Archivo                                  | Tests | Cubre                                                                                         |
 | ---------------------------------------- | ----- | --------------------------------------------------------------------------------------------- |
@@ -916,7 +916,7 @@ npm test --prefix backend
 | `test/validate.test.js`                  | 2     | Middleware central de validaciones (400).                                                     |
 | `test/validators.test.js`                | 9     | Reglas de negocio por módulo (login, cliente, producto).                                      |
 | `test/integracion/clientes.api.test.js`  | 17    | API de clientes: CRUD, duplicados (NIT/email) y permisos por rol.                             |
-| `test/integracion/facturas.api.test.js`  | 26    | API de facturación con doble de MySQL (transacciones, estados, totales).                      |
+| `test/integracion/facturas.api.test.js`  | 35    | API de facturación con doble de MySQL (transacciones, estados, totales).                      |
 | `test/integracion/productos.api.test.js` | 21    | API de productos: CRUD, ajuste de stock, stock insuficiente y permisos.                       |
 
 ### 9.2 Unitarias del frontend (Vitest + jsdom)

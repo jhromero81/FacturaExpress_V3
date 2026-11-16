@@ -16,7 +16,7 @@
 | Correo                 | nodemailer (envío de facturas)           |
 | Variables de entorno   | dotenv                                   |
 | CORS                   | cors (origen del frontend configurable)  |
-| Pruebas                | node --test (138 pruebas en 11 archivos) |
+| Pruebas                | node --test (147 pruebas en 11 archivos) |
 | Control de versiones   | Git + GitHub                             |
 
 ---
@@ -584,7 +584,7 @@ La API queda disponible en `http://localhost:4000` (verificar en `http://localho
 ### Pruebas
 
 ```bash
-npm test                 # 138 pruebas (74 unitarias + 64 de integración)
+npm test                 # 147 pruebas (74 unitarias + 73 de integración)
 npm run test:unit        # solo unitarias
 npm run test:integracion # solo integración
 npm run test:e2e         # 21 casos de aceptación (requiere API + MySQL y E2E_PASSWORD)
