@@ -74,7 +74,7 @@ backend/
 │   ├── email.service.js      # Envío de facturas por correo (nodemailer)
 │   └── pdf.service.js        # Generación de PDF (PDFKit)
 ├── db/
-│   ├── schema.sql            # Creación de BD y 12 tablas
+│   ├── schema.sql            # Creación de BD y 13 tablas
 │   └── seedData.js           # Datos por defecto (semejantes al frontend)
 ├── scripts/
 │   ├── setupDb.js            # Preparación en un paso (db:setup)
@@ -171,7 +171,7 @@ erDiagram
     }
 ```
 
-La base de datos `facturaexpress_apirest` contiene 12 tablas:
+La base de datos `facturaexpress_apirest` contiene 13 tablas:
 
 | Tabla                 | Descripción                                                                                                              |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------ |
@@ -180,6 +180,7 @@ La base de datos `facturaexpress_apirest` contiene 12 tablas:
 | `productos`           | Catálogo de productos (código, nombre, precio, IVA, stock).                                                              |
 | `facturas`            | Cabecera de factura con _snapshot_ del cliente, totales, CUFE, estado DIAN y estado de firma.                            |
 | `factura_items`       | Líneas de cada factura (producto, cantidad, precio, IVA, subtotal).                                                      |
+| `notas_credito`       | Notas crédito que anulan facturas y devuelven stock sin borrar el registro.                                              |
 | `empresa`             | Datos de la empresa emisora y configuración fiscal DIAN (un registro).                                                   |
 | `errores_sistema`     | Registro de errores internos para monitoreo desde el módulo admin.                                                       |
 | `logs_auditoria`      | Bitácora de operaciones (usuario, acción, tabla, IP de origen).                                                          |
@@ -338,16 +339,18 @@ La estructura de respuesta es consistente:
 
 ### 4.4 Ventas y facturación — `/api/facturas`
 
-| Método | Ruta                       | Protegida | Descripción                                                                         |
-| ------ | -------------------------- | --------- | ----------------------------------------------------------------------------------- |
-| GET    | `/api/facturas`            | Sí        | Lista facturas con filtros de estado y búsqueda.                                    |
-| GET    | `/api/facturas/:id`        | Sí        | Factura completa con sus items.                                                     |
-| POST   | `/api/facturas`            | Sí        | **Finaliza una venta** y genera la factura electrónica. **Admin y vendedor.**       |
-| PUT    | `/api/facturas/:id/estado` | Sí        | Actualiza el estado DIAN de una factura. **Admin y contador.**                      |
-| DELETE | `/api/facturas/:id`        | Sí        | Elimina físicamente una factura pendiente (**restituye el stock**). **Solo admin.** |
-| GET    | `/api/facturas/:id/pdf`    | Sí        | Genera el PDF soporte de la factura.                                                |
-| GET    | `/api/facturas/:id/xml`    | Sí        | Genera el XML de la factura (formato DIAN).                                         |
-| GET    | `/api/facturas/:id/csv`    | Sí        | Genera el CSV con datos de la factura.                                              |
+| Método | Ruta                              | Protegida | Descripción                                                                         |
+| ------ | --------------------------------- | --------- | ----------------------------------------------------------------------------------- |
+| GET    | `/api/facturas`                   | Sí        | Lista facturas con filtros de estado y búsqueda.                                    |
+| GET    | `/api/facturas/:id`               | Sí        | Factura completa con sus items.                                                     |
+| POST   | `/api/facturas`                   | Sí        | **Finaliza una venta** y genera la factura electrónica. **Admin y vendedor.**       |
+| PUT    | `/api/facturas/:id/estado`        | Sí        | Actualiza el estado DIAN de una factura. **Admin y contador.**                      |
+| POST   | `/api/facturas/:id/nota-credito`  | Sí        | Anula factura con nota crédito y restituye stock. **Admin y contador.**             |
+| GET    | `/api/facturas/:id/notas-credito` | Sí        | Lista notas crédito asociadas a la factura.                                         |
+| DELETE | `/api/facturas/:id`               | Sí        | Elimina físicamente una factura pendiente (**restituye el stock**). **Solo admin.** |
+| GET    | `/api/facturas/:id/pdf`           | Sí        | Genera el PDF soporte de la factura.                                                |
+| GET    | `/api/facturas/:id/xml`           | Sí        | Genera el XML de la factura (formato DIAN).                                         |
+| GET    | `/api/facturas/:id/csv`           | Sí        | Genera el CSV con datos de la factura.                                              |
 
 Una factura ya `enviada` no se puede eliminar (responde `409`).
 
